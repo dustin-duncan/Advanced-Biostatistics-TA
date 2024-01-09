@@ -9,5 +9,3 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
-Testing to see if my git is connected to my forked repository
