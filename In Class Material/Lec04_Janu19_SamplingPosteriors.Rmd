@@ -135,7 +135,7 @@ And now we use the same procedure to sample parameter values from the posterior 
 
 
 ```{r}
-samples_globe_tossing <- INSERT CODE HERE TO SAMPLE THE POSTERIOR %>%
+samples_globe_tossing <-  %>%
   select(p_w_proposed)
 ```
 

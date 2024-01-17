@@ -25,9 +25,20 @@ This assignment is a walkthough of using the virutal machine to run a shiny app.
 
 ### 1A: What is the conditional probability that we are trying to calculate? Write this in words and symbols, as best you can.
 
+The conditional probability is the probability of having covid given that you have cold-like symptoms 
+
+$$
+\text{Pr}(\text{covid | symptoms})
+$$
+
 
 
 ### 1B: I gave two versions of the calculation in class. The simpler version assumed that you could not have both a cold and covid, while the more complicated one assumed you could have both. Write out one of these as best you can.
+
+$$
+\text{Pr(covid | symptoms)}~~~ [\text{The probability of having covid given cold-like symptoms}] \\ ~ \\
+\text{Pr(covid | symptoms, cold )}~~~ [\text{The probability of having covid given cold-like symptoms and having a cold}]
+$$
 
 
 ## Question 2: Bayesian updated covid odds
@@ -35,6 +46,12 @@ This assignment is a walkthough of using the virutal machine to run a shiny app.
 ### 2A: Low covid prevalence
 **Set the slider to a low value for covid prevalence. Report the value you chose, and describe the graph and explain why you beleive it has the shape and values.**
 
+I chose a 10% probability of having covid given cold like symptoms. The shape of the graph takes on an inverse-logistic function. If we know that there is a low likelihood of people having covid given cold-like symptoms, then the probability of having a cold instead increases with the prevalence of cold-like symptoms rather than having covid,. 
+
 
 ### 2B: High covid prevalence
 **Set the slider to a high value for covid prevalence. Report the value you chose, and describe the graph and explain why you beleive it has the shape and values. How is it different from the low value?**
+
+I chose a 77% probability of having covid given cold like symptoms. If we know that there is high covid prevalence within people who have symptoms, then there are very similar probabilities of people having either a cold or covid given cold like symptoms  
+
+

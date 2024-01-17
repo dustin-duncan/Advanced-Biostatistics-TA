@@ -1,0 +1,29 @@
+---
+title: "Homework 2"
+author: "Dustin Duncan"
+date: "2024-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Complete problems from the end of chapter 2.
+
+* 2E1
+
+
+
+* 2E2
+
+* 2M1
+
+* 2M2
+
+* 2M3
+
+* 2H1
+
+
