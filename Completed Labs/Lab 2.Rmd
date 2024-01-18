@@ -135,7 +135,7 @@ How the book would do it:
 samples2 <- tibble( p = sample(p_grid, prob = posterior, size = 10000, replace = TRUE))
 
 # plotting our samples
-ggplot(data=samples2 , aes(x=p))+ geom_histogram(bins=15)
+ggplot(data=samples2 , aes(x=p))+ geom_histogram(bins=30)
 ```
 
 #### Aside: seeds
@@ -248,6 +248,7 @@ post_approx2 <- tibble(p = seq(from = 0, to = 1, by = stepsize)) %>%
          raw_posterior = likelihood*prior,
          posterior = raw_posterior / sum(raw_posterior)
          )
+plot(post_approx2$posterior ~ post_approx2$p, type = "l")
 ```
 
 
@@ -297,15 +298,18 @@ post.sims.longer <- post.sims %>%
 ggplot(data = post.sims.long, aes(x = Ws, fill = type)) +
   geom_histogram(binwidth = 1,
                  colour = "black",
-                 position = "dodge")
+                 position = "dodge") +
+  scale_fill_manual(values = c("tan", "lightblue")) + 
+  theme_bw()
 ```
 
 
 To answer the question, what is the probability of observing 8 our of 15 water from our posterior?
 ```{r ,eval=TRUE}
 # Answer: ~0.1423
+new <- rbinom(1e4, size = 15, prob = samples3$p)
 
-mean(post.sims.long$Ws == 8)
+mean(new == 8)
 ```
 
 
@@ -316,8 +320,8 @@ Use the posterior to determine the probability of observing 6 out of 9 waters. W
 
 ```{r ,eval=TRUE}
 # Answer: ~0.1746
-new <- rbinom(1e4, size = 9, prob = samples3$p)
-mean(new == 6)
+new1 <- rbinom(1e4, size = 9, prob = samples3$p)
+mean(new1 == 6)
 ```
 
 ### 3M5
@@ -358,7 +362,7 @@ post.sims2 <-
     Wbinomial = rbinom(n(), size = 15, prob = 8 / 15)
   )
 
-# Using outdated gather function 
+# Using gather function 
 post.sims2.long <- gather(post.sims2, "type", "Ws", c("Wsampled", "Wbinomial"))
 
 # Using newer pivot_longer function in dplyr 

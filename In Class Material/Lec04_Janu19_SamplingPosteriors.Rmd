@@ -135,14 +135,14 @@ And now we use the same procedure to sample parameter values from the posterior 
 
 
 ```{r}
-samples_globe_tossing <-  %>%
+samples_globe_tossing <-  sample_n(posterior_table, weight = posterior, size = 1e4, replace = TRUE) %>%
   select(p_w_proposed)
 ```
 
 
 We can quantify the distribution, and see that the mean and median are close to the 2/3 that was observed. 
 ```{r}
-(globe_toss_stats <- INSERT CODE HERE TO CREATE THE DISTRIBUTION SUMMARY)
+(globe_toss_stats <- dist_quant(samples_globe_tossing$p_w_proposed))
 ```
 
 
@@ -151,7 +151,8 @@ We can quantify the distribution, and see that the mean and median are close to 
 Now we want to see what might look like if it came from our posterior distribution. This means that we first pick a value of `p_w` from the sampled values of `p_w_proposed` and then use our "sampling distribution", i.e. the likelihood model, to generate data.
 
 ```{r}
- 
+# Have samples that are sampled from the grid approximation
+# Going to use the samples because that is the truest proportion of water on earth
 
 posterior_predictive_data <- tibble(p_w=samples_globe_tossing$p_w_proposed) %>%
   mutate(data_post = rbinom(n(),size=9,prob=p_w),
@@ -180,6 +181,11 @@ What we see here is that the value of the selected parameter has an effect on th
 Now let's plot the posterior-predictive simulation and compare it to a binomial with the median parameter value from the posterior. We'll use both `geom_histogram` and `geom_freqpoly` to visualize this. They generate similar visualizations, choice of which to use is really a personal preference. By setting `alpha=0.5` we get ghost-like bars so we can see through them. Note that we plot the data from the posterior predictive simulation in red and from the median parameter simulation in blue.  
 
 ```{r}
+# In red is the distribution two graphs above 
+  # includes uncertainty from our estimate and from the binomial draw 
+  # you would want to include both of these variances in your decision making in a future problem
+# In blue is the distribution just using the one parameter (median from above)
+
 ggplot(data=posterior_predictive_data , aes(x=data_post)) + 
   geom_histogram(bins=10,fill="red",alpha=0.5, aes(x=data_post)) +
   geom_histogram(bins=10,fill="blue",alpha=0.5, aes(x=data_median)) +
