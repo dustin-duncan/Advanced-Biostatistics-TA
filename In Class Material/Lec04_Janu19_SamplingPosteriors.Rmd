@@ -200,3 +200,13 @@ ggplot(data=posterior_predictive_data , aes(x=data_post)) +
        y="density")
 ```
 
+```{r}
+# Spend some time plotting histogram of it, and calculating the metrics on it. Then ask yourself what those metrics are showing you 
+
+load("distributions_data.RDS")
+data1
+```
+
+
+
+
