@@ -415,13 +415,13 @@ int.width <- function(N) {
   
   ## 1) calc the interval by using index numbers from your PI object directly
   
-  ## 2) calc the interval through your tibble that you just created (specify the tibble (vector) you're pulling from and the column)
+  ## 2) calc the interval through your tibble that you just created (specify the tibble (vector) you're pulling from and the column) 
 
 }
 ```
 
 
-Note that the function `int.width` will return different values when you call it because it uses randomly generated data, as well as random samples from the posterior. You can check that it works by calling it on a number of observations.
+Note that the function `int.width` will return different values when you call it because it uses randomly generated data, as well as random samples from the posterior. You can check that it works by calling it on a number of observations. 
 
 ```{r,eval=FALSE}
 # 99% percentile interval width when there are two observations
