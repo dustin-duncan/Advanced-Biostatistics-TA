@@ -205,6 +205,17 @@ ggplot(data=posterior_predictive_data , aes(x=data_post)) +
 
 load("distributions_data.RDS")
 data1
+view(data1)
+
+ggplot(data1, aes(x = value)) + 
+  geom_histogram() 
+
+ggplot(data2, aes(x = value)) + 
+  geom_histogram()
+
+stats <- dist_quant(data1$value)
+
+stats1 <- dist_quant(data2$value)
 ```
 
 
