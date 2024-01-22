@@ -408,14 +408,22 @@ int.width <- function(N) {
   # **this will be stored in the values pane in your environment
   
   ## 2) *< 'tibble name' <- 'create tibble with one bound of your PI' %>%  'mutate to add other bound of PI in a second column and the difference between them in a third column' 
+<<<<<<< HEAD
   # **this will be stored in the data pane in your environment. Look at the data types - is your difference column numeric? If not, how do you change it to numeric data type? 
+=======
+  # **this will be stored in the data pane in your environment
+>>>>>>> 4792e918eed300f35ce748bdedcdcaca690b9028
 
   # Calculate the width of that interval
   # < write code here >
   
   ## 1) calc the interval by using index numbers from your PI object directly
   
+<<<<<<< HEAD
   ## 2) calc the interval through your tibble that you just created (specify the tibble (vector) you're pulling from and the column) 
+=======
+  ## 2) calc the interval through your tibble that you just created (specify the tibble (vector) you're pulling from and the column)
+>>>>>>> 4792e918eed300f35ce748bdedcdcaca690b9028
 
 }
 ```
