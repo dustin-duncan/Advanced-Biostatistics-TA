@@ -225,7 +225,8 @@ Which values of $p$ contain the central most $66\%$ of the posterior distributio
 
 ```{r}
 # Answer: p approx between 0.501 and 0.770 
-PI(samples$p, 0.66)
+PI <- PI(samples$p, 0.66)
+PI[2] - PI[1]
 ```
 
 ## Problem(s) 4
@@ -293,7 +294,13 @@ post.sims <-
 
 # Put the data in another form so we can make a histogram
 # replace 6 and 7 with the index numbers for your Wsampled and Wbinomial column
-post.sims.long <- gather(post.sims, "type", "Ws", c("Wsampled", "Wbinomial"))
+post.sims.long <- gather(post.sims, "type", "Ws", 6:7)
+
+# Using newer pivot_longer function in dplyr
+post.sims.long <- post.sims %>% 
+  pivot_longer(col = c(6:7),
+               names_to = "type",
+               values_to = "Ws")
 
 ggplot(data = post.sims.long, aes(x = Ws, fill = type)) +
   geom_histogram(binwidth = 1,
@@ -344,6 +351,21 @@ Repeat everything from 3M1 to here, but now alter the prior so that it is zero a
 # Answers:
 # Your posterior should look like a binomial distribution that's suddenly squashed to zero for p less than or equal to .5
 # The 90% HPDI is between 0.50 and 0.71
+
+# Create your model 
+
+# PLot posterior 
+
+# Take ssamples and compute the 90% HPDI
+
+# Conduct posterior predictive simulation of model and compute likelihood of 8 waters in 15 tosses 
+
+# Use either gather or pivot_longer to get both binomial values and sample values in the same dataframe so you can plot them against each other (checking to see if samples make sense)
+
+# Conduct posterior predictive check of your model
+
+# Compute the likelihood of finding 8 waters in 15 tosses 
+
 # The probability of observing 8 waters in a sample of 15 is around 0.1551
 ```
  
@@ -379,9 +401,21 @@ int.width <- function(N) {
 
   # Calculate the 99% interval
   # < write code here >
+  
+  # You can write this as an object or as a tibble. 
+  
+  ## 1) *< 'object name' <- 'code to calculate percent interval' >* 
+  # **this will be stored in the values pane in your environment
+  
+  ## 2) *< 'tibble name' <- 'create tibble with one bound of your PI' %>%  'mutate to add other bound of PI in a second column and the difference between them in a third column' 
+  # **this will be stored in the data pane in your environment. Look at the data types - is your difference column numeric? If not, how do you change it to numeric data type? 
 
   # Calculate the width of that interval
   # < write code here >
+  
+  ## 1) calc the interval by using index numbers from your PI object directly
+  
+  ## 2) calc the interval through your tibble that you just created (specify the tibble (vector) you're pulling from and the column)
 
 }
 ```
