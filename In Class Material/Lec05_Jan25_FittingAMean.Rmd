@@ -92,7 +92,8 @@ It can be very useful to first see what sort of data, in broad terms, your prior
 Here we apply the prior by drawing values for $\mu$ and $\sigma$, that is how the prior allows us to get parameter values. The actual height values are then drawn from a normally distribution with the mean and variance specified by the parameters.  
 ```{r}
 samps=10e4
-prior_sim <- tibble( mu=rnorm(samps,mean=178,sd=20), sigma=runif(samps,min=0,max=50)) %>%
+prior_sim <- tibble( mu=rnorm(samps,mean=178,sd=20), 
+                     sigma=runif(samps,min=0,max=50)) %>%
   mutate(y=rnorm(n(),mean=mu,sd=sigma)) 
 ```
 

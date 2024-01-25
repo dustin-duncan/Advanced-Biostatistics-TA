@@ -1,0 +1,228 @@
+---
+title: "Lab 3 Template"
+author: "Dustin Duncan"
+date: "2024-01-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+library(bayesplot)
+```
+# Bayesian Statistical Modeling Winter 2022
+# Lab Exercise, Week 3
+
+*When is this lab due?* Labs are due on the Thursday after they are assigned. However, in many cases you can complete them during the lab period itself.   This assignment is due on Thursday, 2/1/2024. Submit Rmd and pdf to gradescope.
+
+
+
+### Medicago height data
+We'll use publicly available data from:  https://figshare.com/articles/dataset/Medicago_truncatula_plant_height_data/8018873
+The data we use are heights of the plant *Medicago truncatula*. The experiment in question was looking at the effect of plants on caterpillars, but we will just use the plant height data. It comes in multiple replicate observations, and we'll fit the mean and variance, using a normal distribution for the likelihood, for each replicate separately. 
+
+
+Load the data. The code below is written assuming this Rmd file is saved in the same folder as the data file *MedicagoHeights.Rds*. You can copy the MedicagoHeights data to the same folder as your Rmd file. (Or, alternatively, you can give the path to the data in the load function.)
+```{r ,eval=FALSE}
+load("MedicagoHeights.Rds")  
+view(plant.heights)
+```
+
+## Basics of the lab - Normal by addition versus multiplication 
+
+#### Normal By addition
+
+How do we prove that a distribution can be normal by addition?
+
+Lets simulate this. To do this, we generate for each person a list of 16 random numbers between -1 and 1. These are individual steps. Then we add these together to get the position after 16 steps. Then replicate 1000 times.
+
+Command line to do the whole thing:
+```{r}
+pos <- replicate(1000, sum(runif(16, -1, 1)))
+hist(pos, col = "lightblue")
+```
+
+Lets verify with a larger number of steps:
+```{r}
+pos2 <- replicate(100000, sum(runif(25, -1, 1)))
+hist(pos2, col = "forestgreen")
+dens(pos2)
+```
+
+So pretty! Where does the normality come from? 
+
+Any process that adds together random values from the same distribution converges to normal. 
+    - Whatever the average is of a sample distribution, each sample from it can
+    be thought of as a fluctuation from that average value.
+    
+    
+#### Normal By Multiplication
+
+Another way to get a normal distribution: 
+
+Suppose the growth rate of an organism is influenced by a dozen loci, each with several alleles that code for more growth.
+    - Each of these loci interact with one another, such that each increase
+    growth by a percentage 
+    - This means that their effects multiply rather than add
+
+Example with code:
+```{r}
+prod(1 +runif(12, 0, 0.1))
+```
+
+This samples 12 random numbers between 1.0 and 1.1, each representing a proportional increase in growth. This 1.0 means no additional growth and 1.1 means a 10% increase. the product of all 12 is computed and returned as an output. 
+
+Lets look at the distribution of 10,000 samples of these. 
+```{r}
+growth <- replicate(10000, prod(1 + runif(12, 0, 0.1)))
+dens(growth, norm.comp = TRUE)
+```
+
+norm.comp compares the density plot to a normal distribution which is pretty cool.
+
+We again converge to a normal distribution because the effect at each locus is quite small. Multiplying small numbers is approximately the same as addition. 
+
+The smaller the effect of each locus, the better this additive approximation will be. 
+
+
+Verifying this information: 
+```{r}
+big <- replicate(10000, prod(1 + runif(12, 0, 0.5)))
+
+small <- replicate(10000, prod(1 + runif(12, 0, 0.1)))
+
+dens(big)
+dens(small)
+```
+
+Here we can see that if the interacting growth deviations are sufficiently small, they will converge to a normal distribution. 
+
+BUT we can see that the large deviations look like a log-normal distribution.
+
+
+#### Normal by Log-multiplication
+
+Large deviations that are multiplied together tend to produce Gaussian distributions on the log scale 
+
+For example: 
+```{r}
+log.big <- replicate(10000, log(prod(1 + runif(12, 0, 0.5))))
+dens(log.big)
+```
+
+
+Adding logs is equivalent to multiplying the original numbers. 
+    - Since measurement scales are arbitrary, there is nothing suspicious
+    about this transformation.
+
+### Visualize and summarize the data
+Plot histograms or density plots of height for each replicate and summarize the means and standard deviations of each replicate. You may use the `filter` function to pick data from specific replicates, or add `fill=Replicate` to the `aes` directive in ggplot. like this:
+```{r ,eval=FALSE}
+ggplot(  plant.heights    ,aes(x=height,fill=Replicate))  +
+  geom_density(alpha=0.5)
+```
+
+
+### Summarize the replicates
+Summaries can be done using dplyr or by first subsetting the data to get each replicate and then using precis or mean and variance commands. 
+
+```{r ,eval=FALSE}
+plant.heights %>%
+  group_by(Replicate) %>%
+  summarise(mean=mean(height),  sd=sd(height)) 
+```
+
+
+### Fit the different replicates and see how they compare
+We'll use a grid approximation to fit the means and standard deviations for each replicate separately. 
+
+Write model formula here:
+$$
+
+$$
+
+To get you started we'll define the log likelihood function. It requires that the height data be in a dataframe called `dataset` and a column called `height`. 
+
+
+
+```{r define_like_function ,eval=FALSE}
+# We're adding the log-likelihoods of each combination of mu and sigma. Why? Look up
+height_loglik_f <- function(mu_input,sigma_input){
+  sum(dnorm(
+  dataset$height , 
+  mean=mu_input,
+  sd=sigma_input,
+  log=TRUE ))
+}
+
+
+height_loglik_f_vec <- Vectorize(height_loglik_f)
+
+# First, collect your data and put it in a dataframe called "dataset". Remember we're working with replicate 1 right now only. 
+
+
+# Set up your priors 
+
+  # It's worth it to plot your priors to see if they make sense 
+curve(dnorm(x, 178, 20), from = 100, to = 250)
+  # This implies that mu is almost certainly between 158 and 198
+
+curve(dunif(x, 0, 50), from = -10, to = 60)
+  # Constructing a flat prior for sigma constrains it to positive values. This makes sense because      it must be positive. 
+  # What does it mean? A standard deviation of 50cm would indicate that 95% of individual heights       lie within 100cm of the average height. That's a pretty large range. 
+
+# Define your grid -> of mu and sigma values 
+
+
+# Compute the posterior 
+
+  # Check your posterior - does it add up to one?
+
+#Sample from your posterior --> same way that we did before. Just select mu and sigma
+  # Why sample from the posterior? It allows you to describe the distribution of confidence in each   combination of mu and sigma. -> Characterizing the shape of the marginal posterior densities
+  # Something to note - in principle, the posterior distribution is not always gaussian in shape. It   depends on the sample size.
+
+# Check your posterior sample distribution using ggplot, then check the marginal plots for mu and sigma. 
+
+
+
+```
+
+
+Now define a grid of $\mu$ and $\sigma$ values and then go through the same steps that we did in class to calculate the posterior probability for each $\mu$ and $\sigma$ pair. Do this separately for each replicate in the dataset. In order to use the first replicate you would do:
+
+```{r ,eval=FALSE}
+dataset <- filter(plant.heights, Replicate == "Rep1")  # dataset is replicate 1
+```
+
+
+### Quantify the posterior distribution
+Use the methods you have available to quantify the posterior distribution.
+```{r}
+# Quantify the posterior distribution of both mu and sigma 
+```
+
+
+
+### Posterior simulations
+
+Use the fitted model from replicate 1 to create a posterior simulation. This means that you will sample the values of $\mu$ and $\sigma$, and then produce an observation of 98 plant heights (this is how many observations there are of each replicate), and find the mean of this simulated dataset. Simulate this 1,000 times, and compare the distribution of this mean to the actual mean of replicate 2. Describe what you see, is it what you expected?
+
+*Remember, every posterior is also potentially a prior for a subsequent analysis, so you can process priors just like posteriors*
+
+```{r}
+# Plot predicted height against observed height for Replicate 1 
+
+# First you will need to simulate your predicted heights 
+  # Simulate mu
+  # Simulate sigma 
+  # Simulate heights as a function of the above two
+
+# Use ggplot to plot it against the observed height values -> looks weird? maybe check your priors
+```
+
+
+### Extra credit
+Do the same procedure for the other replicates. What can you say is similar or different about the replicates? Are there any anomalies?
