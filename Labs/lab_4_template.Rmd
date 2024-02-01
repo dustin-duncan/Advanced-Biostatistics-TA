@@ -15,7 +15,7 @@ library(styler)  # styler can automatically style code for you. Use it via the A
 # Path to the helper.R file, relative to where your R markdown file is. (The '..' means 'go up a directory')
 source("../helper.R")   
 ```
-# Bayesian Statistical Modeling Winter 2024
+# Bayesian Statistical Modeling Winter 2024 blah
 # Lab Exercise, Week 4
 
 
