@@ -1,19 +1,21 @@
 ---
-title: "Lab 3 Key"
+title: "lab 3 copy complete"
 author: "Dustin Duncan"
-date: "2024-01-24"
+date: "2024-01-25"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+library(styler)
 library(tidyverse)
 library(rethinking)
 library(bayesplot)
 library(here)
 library(hexbin)
 library(data.table)
+source("../helper.R")  
 rm(list = ls())
 ```
 # Bayesian Statistical Modeling Winter 2022
@@ -215,8 +217,8 @@ Use the fitted model from replicate 1 to create a posterior simulation. This mea
 
 # Simulating predicted heights 
 
-rep1_simulation <- tibble(mu = rnorm(98, mean = mean(rep1_pos_sample$mu), sd = mean(rep1_pos_sample$sigma)),
-                   sigma = runif(98, min = min(rep1_pos_sample$sigma), max = max(rep1_pos_sample$sigma))) %>% 
+rep1_simulation <- tibble(mu = rnorm(1000, mean = mean(rep1_pos_sample$mu), sd = mean(rep1_pos_sample$sigma)),
+                   sigma = runif(1000, min = min(rep1_pos_sample$sigma), max = max(rep1_pos_sample$sigma))) %>% 
   mutate(predicted_height = rnorm(n(), mean = mu, sd = sigma),
          replicate = "Rep1", 
          type = "predicted")
@@ -281,7 +283,3 @@ plot(post)
 
 ### Extra credit
 Do the same procedure for the other replicates. What can you say is similar or different about the replicates? Are there any anomalies?
-
-
-
-
