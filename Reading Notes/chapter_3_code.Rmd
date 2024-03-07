@@ -13,13 +13,17 @@ knitr::opts_chunk$set(echo = TRUE)
 install.packages("rstan", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
 ```
 
-``{r}
+
+
+```{r}
 install.packages("remotes")
 remotes::install_github("stan-dev/cmdstanr")
+install.packages("cmdstanr")
 install.packages(c("coda","mvtnorm","devtools","loo"))
 library(devtools)
 devtools::install_github("rmcelreath/rethinking")
 ```
+
 
 ```{r}
 library(rethinking)
