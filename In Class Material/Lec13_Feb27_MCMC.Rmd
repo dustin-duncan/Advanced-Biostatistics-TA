@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+rm(list=ls())
 library(tidyverse)
 library(rethinking)
 source("../helper.R")
@@ -21,7 +21,61 @@ source("../helper.R")
 * Learn the `ulam` syntax
 * See how slightly informative (regularizing) priors can improve chain performance
 
+## indicator variables: 
 
+Say you have some wack data that was given to you: 
+```{r}
+wack <- tibble(sample_n = c(1, 2, 3, 4), treat = c("C", "T", "C", "T"), N = c(20, 23, 18, 25), n_alive = c(11, 17, 10, 20), treat_index = c('1', '2', '1', '2'))
+head(wack)
+```
+
+We want to add some indicator variables to this table so that we can add in treatment effect into the model: 
+```{r}
+wack_new <- wack %>% 
+  mutate(I_c = if_else(
+    treat_index == '1', 1, 0),
+    I_t = if_else(
+      treat_index == '2', 1, 0
+    ))
+head(wack_new)
+```
+
+Our model formula for this would be:
+
+$$
+\mathrm{(A)live_i \sim Binomial(N_{i} , P_{i})} \\ 
+\mathrm{Logit(P_{i}) = \mu_{i}} \\
+\text{Choose your own method:} \\
+M_1 ->~ \mu_{i} = a + b*I_{t} \\ or \\
+\mu_{i} = a + b*I_{c} \\ 
+M_2 ->~ \mu_{i} = a_{1}*I_{c} + a_{2}*I_{t} \\ 
+M_3 ->~ \mu_{i} = a + b[T_{i}] \\ 
+M_4 ->~ \mu_{i} = a + \triangle{a}*I_{c} - \triangle{a}*I_{t} \\ 
+M_5 ->~ \mu_i = a + b*T_{i}
+$$
+
+M1 - in M_1, you can choose a value of A and B, that will give you the same output as m2
+  - a now represents the control and b is the difference when you have the 
+  treatment 
+  - now because a is the reference value when I_t = zero, so even in the second version its the same just your baseline is different
+
+
+M2 - Splitting our intercept in M_2 will automatically incoroporate our Indicator variables values when treatment is either 'treatment' or 'control'
+
+M3 - Now here a would be the average survivorship and B is what you get outside of the average 
+  - As long as the difference between the B's is the same, the specific
+  values of a and b are not super important (unidentifiable)
+  - There will be covariance between the distribution of a and both values 
+  of b
+  
+M4 - a is the midpoint between our two treatments, and the delta is the amount that it goes up or down when you have one treatment versus the other.
+  - Your prior for delta(a) is that it would be centered around zero whereas
+  your prior for a is that it would be broad 
+  
+M5 - for treat 1 you get a + b, but for treat 2 you get a + 2*b
+  - But now the parameters are not readily interpretable 
+  - Could rescale it so the values of the index were -1 and +1, then it would
+  become interpretable and function the same as M4 
 
 ## The Metropolis algorithm 
 Here is the code from the book to run a simple implementation of the algorithm. It requires a function that we are trying to measure, which is the way that population size varies by island.
@@ -147,6 +201,12 @@ d2<- as_tibble(d)%>% filter(age>=18)
 ```
 
 
+For the VM to find the stan location we need to add this: 
+```{r}
+set_cmdstan_path(path="/opt/conda/bin/cmdstan")
+```
+
+
 Now run the `ulam` model. The syntax is almost the same as for `quap`, with the addition of instructions for how to run the mcmc algorithm.
 ```{r}
 ulam_model_height <- ulam(
@@ -172,16 +232,15 @@ The output is similar to when we run `quap`, but we have two new columns, `n_eff
 
 Let's take a closer look at what actually comes out of the stan run. The object that we get out of `ulam` has a bunch of extra information attached to it, but for now we just want to see the samples that came out of the algorithm. We take the `@stanfit` part of the `ulam` object. Then we use the `rstan::extract` function to get a dataframe that has all of the samples. It has a column for each parameter we are fitting and as many rows as were sampled (in this case 500).
 ```{r}
-stanfit.ulam_model_height <- ulam_model_height@stanfit
+stanfit.ulam_model_height <- ulam_model_height@cstanfit$draws(format = "df")
 
-(posterior.samples <- rstan::extract(stanfit.ulam_model_height) %>% as_tibble())
 
 ```
 
 
 Now we have our samples, and like before we can work directly with them. For instance we can plot a histogram of the intercept values:
 ```{r}
-ggplot(posterior.samples,aes(x=a))+geom_histogram(bins=20)
+ggplot(stanfit.ulam_model_height,aes(x=a))+geom_histogram(bins=20)
 ```
 
 
@@ -209,7 +268,7 @@ precis( m9.2 )
 Let's look more closely at what is going on here.
 
 ```{r}
-bayesplot::mcmc_pairs(m9.2@stanfit , pars=c("alpha","sigma"  )) 
+bayesplot::mcmc_pairs(m9.2@cstanfit$draws(format="df") , pars=c("alpha","sigma"  )) 
 ```
 
 
@@ -237,7 +296,7 @@ precis( m9.3 )
 
 Let's look more closely at what is going on here.
 ```{r}
-bayesplot::mcmc_pairs(m9.3@stanfit , pars=c("alpha","sigma"  ) )
+bayesplot::mcmc_pairs(m9.3@cstanfit$draws(format="df") , pars=c("alpha","sigma"  ) )
 ```
 
 ```{r}
@@ -275,7 +334,7 @@ Look at the summary. It looks not great.
 precis( m9.4 )
 ```
 ```{r}
-pairs(m9.4@stanfit, pars=c("a1","a2","sigma"))
+mcmc_pairs(m9.4@cstanfit$draws(format="df"), pars=c("a1","a2","sigma"))
 
 traceplot( m9.4 )
 
@@ -284,7 +343,7 @@ trankplot( m9.4 )
 
 Even though this model has non-identifiable parameters, it gets the big picture correct. This also highlights one of the great features of model-based statistics, we can use the output of the model in new combinations without much added work. So here we can reconstruct the aggregate parameter $asum=a1+a2$  and use all the same tools we have developed.
 ```{r}
-post=as.data.frame(m9.4@stanfit) %>% mutate(asum=a1+a2) 
+post=as.data.frame(m9.4@cstanfit$draws(format="df")) %>% mutate(asum=a1+a2) 
 mcmcpairs(select(post,asum,sigma) , pars=c("asum","sigma"))
 ```
 
@@ -309,17 +368,17 @@ precis( m9.5 )
 ```
 
 ```{r}
-pairs(m9.5@stanfit, pars=c("a1","a2","sigma"))
+mcmc_pairs(m9.5@cstanfit$draws(format="df"), pars=c("a1","a2","sigma"))
 
 traceplot( m9.5 )
 
 trankplot( m9.5 )
 ```
 
-Like before this still gets the total right.
+Like before, this still gets the total right.
 ```{r}
-post=as.data.frame(m9.5@stanfit) %>% mutate(asum=a1+a2) 
-mcmcpairs(select(post,asum,sigma) )
+post=as.data.frame(m9.5@cstanfit$draws(format="df")) %>% mutate(asum=a1+a2) 
+mcmc_pairs(select(post,asum,sigma) )
  
 ```
 

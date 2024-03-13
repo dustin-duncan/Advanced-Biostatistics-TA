@@ -1,0 +1,497 @@
+---
+title: "Lab 4 Key"
+author: "Dustin Duncan"
+date: "2024-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(rethinking)
+library(styler)  # styler can automatically style code for you. Use it via the Addins menu at the top, right above all the tabs.
+
+# Path to the helper.R file, relative to where your R markdown file is. (The '..' means 'go up a directory')
+source("../helper.R")   
+```
+# Bayesian Statistical Modeling Winter 2024
+# Lab Exercise, Week 4
+
+
+*When is this lab due?* Labs are due on the Thursday after they are assigned. However, in many cases you can complete them during the lab period itself.   This assignment is due on Thursday, 2/8/2024.  
+
+## Multiple Regression 
+We'll use a dataset included with the Rethinking package, called "foxes". This dataframe includes observations of the weight of 116 foxes from 30 groups in urban areas of England. These foxes are territorial, and individuals are able to forage within their groups territory. The dataframe includes the area controlled by the group, as well as a measure of food available, labeled "avgfood" for average food. Fox groups vary in size, and this is encoded by the column "groupsize".
+
+We'll start by using rethinking's `standardize` function on the potential predictor variables which will ensure that they have a mean of 0. This gives us the predictor variables relative to the mean, which we put in their own columns.
+
+```{r}
+data("foxes") 
+d <- as_tibble(foxes) 
+
+# Put standardized values of the three potential predictors in their own column.
+d$F <- standardize(d$avgfood)
+d$A <- standardize(d$area)
+d$G <- standardize(d$groupsize)
+```
+
+You can view the tibble before and after the standardization to make sure it worked. You already know View() can do this, but you can also *Ctrl-click* the dataframe variable in the code or press *F2* when the text cursor is on the variable. (Doing these on a function will also take you to the source code of the function. This is a nice way to see exactly where a function comes from and what it does.)
+
+
+```{r}
+d
+```
+
+
+
+Let's have a look at the data. We're plotting fox weight on the y-axis and territory area on the x-axis. Since area has been standardized, a value $A=0$ indicates the mean area in the dataset, so foxes on the left are in smaller than average territories, and foxes on the right are in larger than average territories. We'll also color the points by groupsize (non-standardized) and can see that larger groups also tend to be on the right. 
+
+```{r, eval=FALSE}
+ggplot(data = d, aes(x = A, y = weight, group = groupsize, color = group)) +
+  geom_point() + 
+  scale_color_gradientn(colors = c("lightblue", "tan", "forestgreen"))
+
+
+
+```
+
+Group size (G), area controlled by the group (A), and the food available in a group's area (F) are all candidates for variables that can predict weight. To start let's fit separate linear models for each and see how they do.
+
+### Does area affect fox weight?
+
+Let's first fit a model to see how area (A) predicts a fox's weight. In the Latex code below, write out the equations for a linear model for the effect of area on weight and choose parameters for the prior distributions. (We've partially filled this out for you. Add in the ? parts.)
+
+**The linear model tells the model to assume that the predictor variable has a constant and additive relationship to the mean of the outcome. Since the machine looks for every possible combination of parameter values in the posterior distribution of this constant relationship. in the linear model, some of these parameters stand for the strength of the association between the mean of the outcome (mu) and the value of some other parameter.**
+
+$$
+D_i \sim \mathrm{Normal}(\mu, \sigma)\\
+\mu_i   = a +bA*A_i \\
+a \sim \mathrm{Normal}(0, 10)\\
+bA \sim \mathrm{Normal}(0, 0.2)\\
+\sigma \sim \mathrm{Exponential}(1) 
+$$
+Now take this model you've just written down and fit it with `quap`. 
+```{r , eval=FALSE}
+m1 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + bA * A,
+    a ~ dnorm(0, 10),
+    bA ~ dnorm(0, 0.2),
+    sigma ~ dexp(1)
+  ), data = d
+)
+
+precis(m1)  # Look at the summary
+```
+
+Next let's run a prior predictive simulation to check that our priors are reasonably consistent with the data. (rethinking's extract.prior function will be useful here.)
+```{r , eval=FALSE}
+
+prior <- extract.prior(m1)
+seq_A <- seq(from = -2, to = 2, length.out = 30)
+samples_prior_m1 <- link_df(m1, data = list(A = seq_A), post = prior)
+
+ggplot(data = samples_prior_m1, aes(x = A, y = mu)) +
+  geom_point(alpha = .05)
+
+```
+
+Now with the fitted model we can ask how well it represents the actual observations. We also ask how area values that we did not observe are represented by the model. 
+
+To do this let's first make samples of possible mu's for a given area. That is, get a list of area (a) values and for each of them pull a couple samples from the posterior. This will give you *a* and *bA* values. Then with the power of *link_df* we can calculate the corresponding *mu*. This effectively gives us samples of *mu* from the posterior. 
+
+```{r , eval=FALSE}
+seq_A <- seq(from = -2, to = 2, length.out = 30) # A list of A values
+samples_post_m1 <- link_df(m1, data = list(A = seq_A))
+```
+
+Because for each *A* we pull multiple samples we also get multiple *mu* values. The following code makes a table that, for each area size, gives us the mean *mu* associated with it along with the bounds one the 80 percent interval.
+
+```{r , eval=FALSE}
+summarize_samples_post_m1 <- group_by(samples_post_m1, A) %>%
+  summarize(
+    mean_mu = mean(mu),
+    lower_mu = quantile(mu, 0.10),
+    upper_mu = quantile(mu, 0.90)
+  ) %>%
+  ungroup()
+```
+
+With *geom_ribbon* we can plot the range that this 80% interval covers. Overlaid on this is the actual data. Remember that this 80% interval is for the *mean weight*, not the weight itself. The blue points are the mean-mu values themselves.
+
+```{r , eval=FALSE}
+ggplot(data = d, aes(x = A, y = weight)) +
+  geom_point() +
+  geom_ribbon(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = A, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) +
+  geom_point(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = A, y = mean_mu, ), color = "blue"
+  )
+
+```
+We would also like to put actual weight predictions onto this plot, not just the average mu values. The function *sim_df* can give us these.
+
+```{r , eval=FALSE}
+simulations_post_m1 <- sim_df(m1, data = list(A = seq_A))
+summarize_simulations_post_m1 <- group_by(simulations_post_m1, A) %>% 
+  summarize(
+    mean_weight = mean(weight),
+    lower_weight = quantile(weight, 0.10),
+    upper_weight = quantile(weight, 0.90)
+  ) %>% 
+  ungroup()
+```
+
+Now remake the above plot, this time also add a red ribbon for the 80% percentile interval for the simulated weights. This ribbon should be much wider than the blue ribbon since we have additional variation caused by sampling from the average.
+
+```{r , eval=FALSE}
+# Put plot code here
+ggplot(data = d, aes(x = A, y = weight)) + 
+  geom_point() + 
+  geom_ribbon(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = A, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) +
+  geom_point(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = A, y = mean_mu, ), color = "blue"
+  ) + 
+  geom_ribbon(data = summarize_simulations_post_m1, inherit.aes = FALSE, aes(x = A, ymin = lower_weight, ymax = upper_weight), alpha = 0.4, fill = "red")
+```
+From these plots how well do you think that this linear model predicts fox weight?
+
+It does not appear that area is a good predictor of fox weight. In this case, there doesnt seem to be any colinearity indicating that fox weight increases as area increases. 
+
+## M2 
+
+### Does food level affect fox weight?
+
+Repeat everything you did above but now with food level (F) instead of area.
+
+```{r}
+m2 <- quap(
+  alist(
+    weight ~dnorm(mu, sigma),
+    mu <- a + bF*F,
+    a ~ dnorm(0, 10),
+    bF ~ dnorm(0, 0.2),
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+
+precis(m2)
+```
+
+### Extracting priors from m2 and taking samples from it
+
+```{r}
+# Extracting priors 
+prior2 <- extract.prior(m2)
+
+# Taking samples from the prior and plotting them 
+seq_F <- seq(from = -2, to = 2, length.out = 30)
+samples_prior_m2 <- link_df(m2, data = list(F = seq_F), post = prior2)
+ggplot(data = samples_prior_m2, aes(x = F, y = mu)) + 
+  geom_point(alpha = 0.5)
+```
+### Taking samples from the posterior and summarizing them 
+
+```{r}
+# Sampling the posterior distribution 
+seq_F <- seq(from = -2, to = 2, length.out = 30)
+samples_post_m2 <- link_df(m2, data = list(F = seq_F))
+
+# Summarizing samples 
+summarize_samples_post_m2 <- group_by(samples_post_m2, F) %>% 
+  summarize(mean_mu = mean(mu),
+            lower_mu = quantile(mu, 0.1),
+            upper_mu = quantile(mu, 0.9)) %>% 
+  ungroup()
+```
+
+### Plotting them against the data with ribbon 
+
+```{r}
+ggplot(data = d, aes(x = F, y = weight)) + 
+  geom_point() + 
+  geom_ribbon(data = summarize_samples_post_m2, inherit.aes = FALSE, aes(x = F, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue") + 
+  geom_point(data = summarize_samples_post_m2, inherit.aes = FALSE, aes(x = F, y = mean_mu), color = "blue")
+```
+
+**Hmm not looking too hot** 
+
+### Simulating observations and plotting those against the samples and actual data.
+
+```{r}
+simulations_post_m2 <- sim_df(m2, data = list(F = seq_F))
+summarize_simulations_post_m2 <- group_by(simulations_post_m2, F) %>% 
+  summarize(mean_mu = mean(weight),
+            lower_weight = quantile(weight, 0.1),
+            upper_weight = quantile(weight, 0.9)) %>% 
+  ungroup()
+```
+
+### Plotting simulated weights against sampled weights and actual data 
+
+```{r}
+ggplot(data = d, aes(x = F, y = weight)) + 
+  geom_point() + 
+  geom_ribbon(
+    data = summarize_samples_post_m2, inherit.aes = FALSE,
+    aes(x = F, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) + 
+  geom_point(
+    data = summarize_samples_post_m2, inherit.aes = FALSE,
+    aes(x = F, y = mean_mu), color = "blue"
+  ) +
+  geom_ribbon(data = summarize_simulations_post_m2, inherit.aes = FALSE, aes(x = F, ymin = lower_weight, ymax = upper_weight), alpha = 0.4, fill = "red")
+```
+**It appears that food also does not appear to be a significant predictor of weight for foxes. As standardized food increases fox weight stays the same.** 
+
+## M3
+
+### Does group size affect weight?
+
+Repeat the analysis again, but now with group size (G) as the predictor.
+```{r}
+m3 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + bG*G,
+    a ~ dnorm(0, 10),
+    bG ~ dnorm(0, 0.2),
+    sigma ~ dexp(1)
+  ), data = d
+)
+
+precis(m3)
+```
+
+### Extracting priors from m3 and taking samples and plotting them 
+
+```{r}
+# Extracting our priors from m3
+prior3 <- extract.prior(m3)
+
+# Sequencing G
+seq_G <- seq(from = -2, to = 2, length.out = 30)
+
+# Sampling from prior3
+samples_prior_m3 <- link_df(m3, data = list(G = seq_G), post = prior3)
+ggplot(data = samples_prior_m3, aes(x = G, y = mu)) + 
+  geom_point(alpha = 0.5)
+```
+
+### Taking samples from posterior and plotting them 
+
+```{r}
+# Sampling to get a list of G values from m3
+samples_post_m3 <- link_df(m3, data = list(G = seq_G))
+summarize_samples_post_m3 <- group_by(samples_post_m3, G) %>% 
+  summarize(mean_mu = mean(mu),
+            lower_mu = quantile(mu, 0.1),
+            upper_mu = quantile(mu, 0.9)) %>% 
+  ungroup()
+```
+
+
+### Plotting 80% interval of samples over actual data 
+
+```{r}
+ggplot(data = d, aes(x = G, y = weight)) + 
+  geom_point() + 
+  geom_ribbon(
+    data = summarize_samples_post_m3, inherit.aes = FALSE,
+    aes(x = G, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) + 
+  geom_point(
+    data = summarize_samples_post_m3, inherit.aes = FALSE,
+    aes(x = G, y = mean_mu), color = "blue"
+  )
+```
+
+**Hmm something looks to be going on here. We know that group size looks like that because group size is discrete and not continuous**
+
+### Simulating weights from posterior and plotting them again. 
+
+```{r}
+simulations_post_m3 <- sim_df(m3, data = list(G = seq_G))
+
+summarize_simulations_post_m3 <- group_by(simulations_post_m3, G) %>% 
+  summarize(mean = mean(weight),
+            lower_weight = quantile(weight, 0.1),
+            upper_weight = quantile(weight, 0.9)) %>% 
+  ungroup()
+ggplot(data = d, aes(x = G, y = weight)) + 
+  geom_point() + 
+  geom_ribbon(
+    data = summarize_samples_post_m3, inherit.aes = FALSE,
+    aes(x = G, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) + 
+  geom_point(
+    data = summarize_samples_post_m3, inherit.aes = FALSE,
+    aes(x = G, y = mean_mu), color = "blue"
+  ) + 
+  geom_ribbon(data = summarize_simulations_post_m3, inherit.aes = FALSE, aes(x = G, ymin = lower_weight, ymax = upper_weight), alpha = 0.4, fill = "red")
+                                
+```
+
+**Hmm here we see that there might be some correlation between fox weight and group size that is NEGATIVE?! Larger group = more mouths to feed = less food per fox?**
+
+
+## M4
+
+### Does food affect weight when we control for group size?
+
+We've seen that food and area do not predict fox weight, and that group size somewhat predicts it. Let's try adding both at once. Fill out the model below so that *mu* comes from a linear combination of food (F) and group size (G).
+
+$$
+D_i \sim  \mathrm{Normal}(\mu, \sigma)\\
+\mu_i   = a + bF * F + bG * G\\
+a \sim  \mathrm{Normal}(0, 10)\\
+bF \sim  \mathrm{Normal}(0, 0.2)\\
+bG \sim  \mathrm{Normal}(0, 0.5)\\
+\sigma \sim \mathrm{Exponential}(1)
+$$
+### Now use quap to fit the model.
+
+```{r}
+m4 <- quap( 
+  alist(
+  weight ~dnorm(mu, sigma),
+  mu <- a + bG*G + bF*F,
+  a ~ dnorm(0, 10),
+  bG ~ dnorm(0, 0.5),
+  bF ~ dnorm(0, 0.2),
+  sigma ~ dexp(1)
+), data = d
+)
+
+
+precis(m4)
+```
+We can plot each of the lower level parameters against each other with the *pairs* function from rethinking.
+
+```{r , eval=FALSE}
+rethinking::pairs(m4)
+```
+
+
+
+Now make a plot that, for each group, compares the mean predicted weights (mu) actual mean weights. That is to say, each fox group has data about food and weight. We can put those values in our model to predict the mu of each group. We can then compare our prediction with the actual mean weight of each group.
+
+**Lets see how group affects weight when we control for food at its mean.**
+
+```{r}
+test_d <- tibble(G=seq(from=-2,to=2,by=0.1),F=0)
+```
+
+
+```{r , eval=FALSE}
+
+# Generate samples here 
+samples_post_m4 <- link_df(m4, test_d)
+summarize_samples_post_m4 <- group_by(samples_post_m4, index) %>% 
+  summarize(mean_mu = mean(mu),
+            lower_mu = quantile(mu, 0.1),
+            upper_mu = quantile(mu, 0.9),
+            G=G) %>% 
+  ungroup()
+# Make a mean_weight by mean_mu plot here.
+# ggplot(data = summarize_samples_post_m4, aes(x = mean_mu, y = mean_weight)) + 
+#   geom_point() + 
+#   geom_errorbar(aes(ymin = lower_mu, ymax = upper_mu)) + 
+#   geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+Finally, have the model simulate the weights themselves and make a plot of your choosing to compare them.
+
+### Simulating weights from the posterior and plotting them again. 
+
+```{r , eval=FALSE}
+# Simulating from m4 posterior and summarizing predicted weights 
+simulations_post_m4 <- sim_df(m4, test_d)
+
+summarize_simulations_post_m4 <- group_by(simulations_post_m4, index) %>% 
+  dplyr::summarize(mean_weight = mean(weight),
+            lower_weight = quantile(weight, 0.1),
+            upper_weight = quantile(weight, 0.9),
+            G=G) %>% 
+  ungroup()
+
+ggplot(summarize_samples_post_m4,aes(x = G, y =mean_mu)) +
+  geom_line(color="red")+
+  geom_point(data = d, inherit.aes = FALSE, aes(x = G, y = weight), color = "tan") + 
+  geom_ribbon(aes(ymin=lower_mu,ymax=upper_mu),alpha=0.5,fill="red")+
+  geom_ribbon(data=summarize_simulations_post_m4,inherit.aes = FALSE,
+              aes(x=G,ymin=lower_weight,ymax=upper_weight),alpha=0.5,fill="blue") + 
+  labs(title = "How the effect of Group size Changes Weight when Food is controlled for")
+```
+
+## Now running our model when G is controlled and F varies 
+
+```{r}
+test_d <- tibble(F=seq(from=-2,to=2,by=0.1),G=0)
+```
+
+```{r}
+samples_post_m4G <- link_df(m4, test_d)
+summarize_samples_post_m4G <- group_by(samples_post_m4G, index) %>% 
+  summarize(mean_mu = mean(mu),
+            lower_mu = quantile(mu, 0.1),
+            upper_mu = quantile(mu, 0.9),
+            F=F) %>% 
+  ungroup()
+```
+
+
+```{r}
+simulations_post_m4G <- sim_df(m4, test_d)
+summarize_simulations_post_m4G <- group_by(simulations_post_m4G, index) %>% 
+  summarize(mean_weight = mean(weight),
+            lower_weight = quantile(weight, 0.1),
+            upper_weight = quantile(weight, 0.9),
+            F=F) %>% 
+  ungroup()
+```
+Now plotting it. 
+
+```{r}
+
+ggplot(summarize_samples_post_m4G,aes(x = F, y =mean_mu)) +
+  geom_line(color="red")+
+  geom_point(data = d, inherit.aes = FALSE, aes(x = F, y = weight), color = "tan") + 
+  geom_ribbon(aes(ymin=lower_mu,ymax=upper_mu),alpha=0.5,fill="red")+
+  geom_ribbon(data=summarize_simulations_post_m4G,inherit.aes = FALSE,
+              aes(x=F,ymin=lower_weight,ymax=upper_weight),alpha=0.5,fill="blue") + 
+  labs(title = "How the effect of Food Changes Weight when group size is controlled for")
+```
+
+
+
+```{r}
+ggsave(here::here("labs", "food_control.jpg"), food_control_plot)
+ggsave(here::here("labs", "group_control.jpg"), group_control_ouput)
+```
+
+
+```{r}
+library(patchwork)
+
+food_control_plot / group_control_ouput
+```
+
+
+
+
+
+
+

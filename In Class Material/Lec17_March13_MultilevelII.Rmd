@@ -27,6 +27,7 @@ a_bar <- 1.5
 sigma <- 1.5
 nponds <- 60
 ```
+
 ```{r}
 inv_logit(1.5)
 ```

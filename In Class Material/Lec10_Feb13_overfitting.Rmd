@@ -8,6 +8,7 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+rm(list = ls())
 library(tidyverse)
 library(rethinking)
 source("../helper.R")
@@ -17,10 +18,8 @@ source("../helper.R")
 # Today's objectives:  
 
 * Calculate the fit of a model to data for each data point, averaging over the sampled parameter values   
-* Write out a regression model with a polynomial function for the transformation  
 * Observing overfitting in polynomial regression models    
 * Observe overfitting in categorical models  
-* Write out binomial likelihood models with groups of data
 
 
 
@@ -76,7 +75,7 @@ precis(m6.7)
 precis(m6.8)
 ```
 
-We found that in `m6.8`, the treatment has a positive effect on plant growth, but in `m6.7`, treatment has an effect close to zero and equally likely to be positive as negative. Fungus, on the other hand, has a strictly negative effect. This is an example of post-treatment bias, lack of fungus is due to the treatment, but not all treated plants lack fungus, so fungus is more associated with plant growth than treatment. Even more, once you know the fungus status of a plant, learning treatment does little. 
+**We found that in `m6.8`, the treatment has a positive effect on plant growth, but in `m6.7`, treatment has an effect close to zero and equally likely to be positive as negative. Fungus, on the other hand, has a strictly negative effect. This is an example of post-treatment bias, lack of fungus is due to the treatment, but not all treated plants lack fungus, so fungus is more associated with plant growth than treatment. Even more, once you know the fungus status of a plant, learning treatment does little.**
 
 
 How do these models differ in terms of how they predict the observed growth rates? We can calculate this by measuring the average difference between simlations from our inferred parameters and the actual observed values, and we can do this for every single point in the dataset. We will do this using the mean squared difference between the observation and the simulation, what is commonly used in least-squares regression and in calculating $R^2$.
@@ -190,6 +189,40 @@ m7.2 <- quap(
 
 Now you write the code for the models that have higher order polynomials up to 5 terms. 
  
+```{r  }
+## R code 7.8
+m7.3 <- quap(
+    alist(
+        brain_std ~ dnorm( mu , exp(log_sigma) ),
+        mu <- a + b[1]*mass_std + b[2]*mass_std^2 +
+                  b[3]*mass_std^3,
+        a ~ dnorm( 0.5 , 1 ),
+        b ~ dnorm( 0 , 10 ),
+        log_sigma ~ dnorm( 0 , 1 )
+    ), data=d , start=list(b=rep(0,3)) )
+
+m7.4 <- quap(
+    alist(
+        brain_std ~ dnorm( mu , exp(log_sigma) ),
+        mu <- a + b[1]*mass_std + b[2]*mass_std^2 +
+                  b[3]*mass_std^3 + b[4]*mass_std^4,
+        a ~ dnorm( 0.5 , 1 ),
+        b ~ dnorm( 0 , 10 ),
+        log_sigma ~ dnorm( 0 , 1 )
+    ), data=d , start=list(b=rep(0,4)) )
+
+m7.5 <- quap(
+    alist(
+        brain_std ~ dnorm( mu , exp(log_sigma) ),
+        mu <- a + b[1]*mass_std + b[2]*mass_std^2 +
+                  b[3]*mass_std^3 + b[4]*mass_std^4 +
+                  b[5]*mass_std^5,
+        a ~ dnorm( 0.5 , 1 ),
+        b ~ dnorm( 0 , 10 ),
+        log_sigma ~ dnorm( 0 , 1 )
+    ), data=d , start=list(b=rep(0,5)) )
+```
+
 
 
 For the final model, we need to specify the standard deviation itself or the model won't run properly.
@@ -228,18 +261,93 @@ ggplot(data=d, aes(x=mass_std,y=brain_std)) +
 ```
 
 Now you plot the model fit ranges for the higher order models
+```{r}
+samps.7.2 <- link_df(m7.2,data=tibble(mass_std=seq(from=-1, to=1.5, by=0.1)))
 
-### overfitting fish
+summary.7.2 <- samps.7.2 %>%
+  group_by(mass_std)%>%
+  summarise(mean_mu = mean(mu),
+            lower_mu = quantile(mu,0.1),
+            upper_mu = quantile(mu,0.9)) %>%
+  ungroup() 
+
+ggplot(data=d, aes(x=mass_std,y=brain_std)) + 
+  geom_point()+
+  geom_ribbon(data=summary.7.2, inherit.aes = FALSE,aes(x=mass_std, ymin=lower_mu,ymax=upper_mu), fill="blue", alpha=0.2)+
+  geom_line(data=summary.7.2,aes(x=mass_std,y=mean_mu),color="red")
+```
 
 ```{r}
+samps.7.3 <- link_df(m7.3,data=tibble(mass_std=seq(from=-1, to=1.5, by=0.1)))
 
-load("../Midterm Assessment/ClownFishData.RData")
+summary.7.3 <- samps.7.3 %>%
+  group_by(mass_std)%>%
+  summarise(mean_mu = mean(mu),
+            lower_mu = quantile(mu,0.1),
+            upper_mu = quantile(mu,0.9)) %>%
+  ungroup() 
+
+ggplot(data=d, aes(x=mass_std,y=brain_std)) + 
+  geom_point()+
+  geom_ribbon(data=summary.7.3, inherit.aes = FALSE,aes(x=mass_std, ymin=lower_mu,ymax=upper_mu), fill="blue", alpha=0.2)+
+  geom_line(data=summary.7.3,aes(x=mass_std,y=mean_mu),color="red")
+```
+```{r}
+samps.7.4 <- link_df(m7.4,data=tibble(mass_std=seq(from=-1, to=1.5, by=0.1)))
+
+summary.7.4 <- samps.7.4 %>%
+  group_by(mass_std)%>%
+  summarise(mean_mu = mean(mu),
+            lower_mu = quantile(mu,0.1),
+            upper_mu = quantile(mu,0.9)) %>%
+  ungroup() 
+
+ggplot(data=d, aes(x=mass_std,y=brain_std)) + 
+  geom_point()+
+  geom_ribbon(data=summary.7.4, inherit.aes = FALSE,aes(x=mass_std, ymin=lower_mu,ymax=upper_mu), fill="blue", alpha=0.2)+
+  geom_line(data=summary.7.4,aes(x=mass_std,y=mean_mu),color="red")
+```
+
+```{r}
+samps.7.5 <- link_df(m7.5,data=tibble(mass_std=seq(from=-1, to=1.5, by=0.1)))
+
+summary.7.5 <- samps.7.5 %>%
+  group_by(mass_std)%>%
+  summarise(mean_mu = mean(mu),
+            lower_mu = quantile(mu,0.1),
+            upper_mu = quantile(mu,0.9)) %>%
+  ungroup() 
+
+ggplot(data=d, aes(x=mass_std,y=brain_std)) + 
+  geom_point()+
+  geom_ribbon(data=summary.7.5, inherit.aes = FALSE,aes(x=mass_std, ymin=lower_mu,ymax=upper_mu), fill="blue", alpha=0.2)+
+  geom_line(data=summary.7.5,aes(x=mass_std,y=mean_mu),color="red")
+```
+
+```{r}
+samps.7.6 <- link_df(m7.6,data=tibble(mass_std=seq(from=-1, to=1.5, by=0.1)))
+
+summary.7.6 <- samps.7.6 %>%
+  group_by(mass_std)%>%
+  summarise(mean_mu = mean(mu),
+            lower_mu = quantile(mu,0.1),
+            upper_mu = quantile(mu,0.9)) %>%
+  ungroup() 
+
+ggplot(data=d, aes(x=mass_std,y=brain_std)) + 
+  geom_point()+
+  geom_ribbon(data=summary.7.6, inherit.aes = FALSE,aes(x=mass_std, ymin=lower_mu,ymax=upper_mu), fill="blue", alpha=0.2)+
+  geom_line(data=summary.7.6,aes(x=mass_std,y=mean_mu),color="red")
+```
+### overfitting fish
+```{r}
+
+load("/Users/dustinduncan/Downloads/ClownFishData (2).RData")
 data<- data %>% 
   distinct()%>%
   rowid_to_column("index")
  
 ```
-
 
 Fit the proportion of eggs laid
 ```{r}
@@ -252,13 +360,13 @@ m.all <- quap( alist(
 precis(m.all)
 ```
 
-It's very certain that, on average, 61% of eggs hatch. Which is just repeating to us that, over the whole dataset, 61% of the eggs did hatch.
+It's very certain that, on average, 61% of eggs hatch.
 
 ```{r}
 sum(data$Eggs_Hatched)/sum(data$Eggs_Laid)
 ```
 
-Let's divide the data up into two groups and fit each group with it's own $\mu$ parameter.
+Let's divide the data up into two groups
 ```{r}
 data.two <- data %>% mutate(group=ceiling(index/64)) 
  
@@ -272,9 +380,8 @@ m.two <- quap( alist(
 precis(m.two, depth=2)
 ```
 
-And now visualize the parameters that we get by fitting the two groups separately.
 ```{r}
-mu.samps<-extract.samples(m.two  )$mu%>% as_tibble()
+mu.samps<-extract.samples(m.two  )$mu %>% as_tibble()
 
 
 bayesplot::mcmc_intervals(mu.samps) 
@@ -282,4 +389,111 @@ bayesplot::mcmc_intervals(mu.samps)
 
 
 
-Now you can divide the data up into 4 groups, or 8 groups, or 16 groups, and see what how the fit changes:
+Let's divide the data up into 4 groups
+```{r}
+data.four <- data %>% mutate(group=ceiling(index/32))  
+
+m.four <- quap( alist(
+  Eggs_Hatched ~ dbinom(Eggs_Laid,mu[group]) ,
+  mu[group] ~ dunif(0,1)),
+  data=data.four
+)
+
+
+precis(m.four, depth=2) 
+```
+
+```{r}
+mu.samps<-extract.samples(m.four  )$mu %>% as_tibble()
+
+
+bayesplot::mcmc_intervals(mu.samps)
+```
+
+
+
+
+Let's divide the data up into 8 groups
+```{r}
+data.eight <- data %>% mutate(group=ceiling(index/16))  
+
+m.eight <- quap( alist(
+  Eggs_Hatched ~ dbinom(Eggs_Laid,mu[group]) ,
+  mu[group] ~ dunif(0,1)),
+  data=data.eight
+)
+
+
+precis(m.eight, depth=2) 
+```
+
+```{r}
+mu.samps<-extract.samples(m.eight  )$mu%>% as_tibble()
+
+
+bayesplot::mcmc_intervals(mu.samps)
+```
+
+
+
+Let's divide the data up into 16 groups
+```{r}
+data.sixteen <- data %>% mutate(group=ceiling(index/8))  
+
+m.sixteen <- quap( alist(
+  Eggs_Hatched ~ dbinom(Eggs_Laid,mu[group]) ,
+  mu[group] ~ dunif(0,1)),
+  data=data.sixteen
+)
+
+
+
+mu.samps<-extract.samples(m.sixteen  )$mu%>% as_tibble()
+
+
+bayesplot::mcmc_intervals(mu.samps)
+```
+
+
+
+Let's divide the data up into 32 groups
+```{r}
+data.thirtytwo <- data %>% mutate(group=ceiling(index/4))  
+
+m.thirtytwo <- quap( alist(
+  Eggs_Hatched ~ dbinom(Eggs_Laid,mu[group]) ,
+  mu[group] ~ dunif(0,1)),
+  data=data.thirtytwo
+)
+
+
+
+mu.samps<-extract.samples(m.thirtytwo  )$mu%>% as_tibble()
+
+
+bayesplot::mcmc_intervals(mu.samps) +
+  xlim(0,1)
+```
+
+
+Let's divide the data up into 64 groups
+```{r}
+data.thirtytwo <- data %>% mutate(group=ceiling(index/2))   %>% view()
+
+m.thirtytwo <- quap( alist(
+  Eggs_Hatched ~ dbinom(Eggs_Laid,mu[group]) ,
+  mu[group] ~ dunif(0,1)),
+  data=data.thirtytwo,
+  start=list( mu = rep(0.6,64)),
+  method="Nelder-Mead",
+  control=list(maxit=2000)
+)
+
+ 
+
+mu.samps<-extract.samples(m.thirtytwo  )$mu%>% as_tibble()
+
+
+bayesplot::mcmc_intervals(mu.samps) +
+  xlim(0,1)
+```

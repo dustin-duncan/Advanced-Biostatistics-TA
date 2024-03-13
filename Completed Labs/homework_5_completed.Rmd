@@ -1,0 +1,220 @@
+---
+title: "Homework 5 Completed"
+author: "Dustin Duncan"
+date: "2024-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rethinking)
+source("../helper.R")
+```
+# Bayesian Statistical Modeling Winter 2024
+# Homework, Week 6
+
+*When is homework due?* Homework is due on Mondays (Tuesday if Monday is a holiday). This assignment is due on Monday, 2/21/2024. 
+
+
+Complete these problems from the end of chapter 7.
+
+## 7E2
+
+## 7E3
+
+## 7E4
+
+## 7M3
+
+## Optional but fun: 7H3
+
+
+
+## 8E1
+1) Temperature --> Warmer temperature would make the bread dough rise faster
+
+2) parents salary --> more money at home increases likelihood of receiving education
+
+3) Air --> Air must be present in a given amount to combine with gasoline and 
+lead it to combust 
+
+
+## 8E2
+1) Carmelizing onions --> interaction between heat and time cooking 
+
+
+## 8E3
+1) carmel <- a + b_H * Heat - b_T * Time
+
+2) speed <- a + b_C * Cylinders + b_F * FuelInjector
+
+3) politics <- a + b_P * Parents - b_F * Friends 
+
+4) Intelligence <- a + b_S * social - b_M * Manipulative appendages
+
+
+
+## 8M1
+Chapter example:
+Data are sizes of blooms from beds of tulips grown in greenhouses, under different soil and light conditions. 
+```{r}
+data(tulips)
+d <- tulips
+
+str(d)
+```
+Blooms is going to be our outcome. Water and shade columns will be our predictor variables. 
+
+Both light and water help plants grow, so its reasonable to say that the independent effect of each will be to produce bigger blooms. However, photosynthesis cant be carried out without light if water is present, and cant be carried out without water if light is present. 
+
+We can model this interdependency with an interaction effect. --> Simple linear two-way interaction is a place to start. 
+
+#### The models: 
+
+1) The model with both water and shade but no interaction
+  Where B_i is the value of blooms on row i, W_i is the value of water, and S_i is shade. 
+  The symbols W bar and S bar are the means of water and shade. All together, this is just a linear regression with two predictors, each centered by subtracting its mean.
+
+$$
+\mathrm{B_i \sim Normal(\mu_i , \sigma)} \\ 
+\mathrm{\mu_i = \alpha + \beta_W (W_i - \bar{W}) + \beta_S (S_i - \bar{S})}
+$$
+To make estimation easier, lets center W and S and scale B by its maximum:
+```{r}
+d$blooms_std <- d$blooms / max(d$blooms)
+
+d$water_cent <- d$water / mean(d$water)
+
+d$shade_cent <- d$shade / mean(d$shade)
+```
+
+Now blooms ranges from 0 to 1, and both water and shade - cent range from -1 to 1/ 
+
+Scaled blooms for three reasons:
+  1. the large values on the raw scale will make optimization difficult 
+  2. It will be easier to assign a reasonable prior this way 
+  3. We dont want to standardize blooms, because zero is a meaningful boundary
+    we want to preserve 
+
+There are three parameters in this model aside from sigma, so we need three priors:
+
+$$
+\mathrm{\alpha \sim Normal(0.5, 1)} \\ 
+\mathrm{\beta_W \sim Normal(0, 1)} \\ 
+\mathrm{\beta_S \sim Normal(0, 1)} 
+$$
+*Centering the intercept at 0.5 implies that, when both water and shade are at their mean values, the model expects blooms to be halfway to the observed maximum.*
+
+*The two slopes are centered on zero, implying no prior information about direction* 
+Basic botany tells us that the slopes should be positive, but these will be fine for now
+The prior bounds on the parameters come from the prior standard deviations, all set to 1 here. These are surely too broad. The intercept α must be greater than zero and less than one, for example. But this prior assigns most of the probability outside that range.
+  If it’s 0.5 units from the mean to zero, then a standard deviation of 0.25 should put only
+  5% of the mass outside the valid internal.
+
+What would a very strong effect of water and shade look like? How big could those slopes be in theory? The range of both water and shade is 2—from −1 to 1 is 2 units. *To take us from the theoretical minimum of zero blooms on one end to the observed maximum of 1—a range of 1 unit—on the other would require a slope of 0.5 from either variable–0.5 × 2 = 1. So if we assign a standard deviation of 0.25 to each, then 95% of the prior slopes are from −0.5 to 0.5, so either variable could in principle account for the entire range, but it would be unlikely.* Remember, the goals here are to assign weakly informative priors to discourage overfitting—impossibly large effects should be assigned low prior probability—and also to force ourselves to think about what the model means.
+
+Building our model:
+```{r}
+m8.4 <- quap(
+  alist(
+    blooms_std ~ dnorm(mu, sigma),
+    mu <- a + bw*water_cent + bs*shade_cent,
+    a ~ dnorm(0.5, 0.25),
+    bw ~ dnorm(0, 0.25),
+    bs ~ dnorm(0, 0.25),
+    sigma ~ dexp(1)
+  ), data = d
+)
+```
+
+Its a good idea to simulate lines from the prior, but before doing that, lets define the interaction model as well: 
+
+2) the model that also contains the interaction between water and shade 
+
+To build an interaction between water and shade, we need to construct mu so that the impact of changing either water or shade depends on the value of the other variable. 
+  For example, if water is low, then decreasing the shade can't help as much as when water
+  is high 
+  *We want the slope of water, bw, to be conditional on the shade, and likewise for shade being conditional on water*
+  
+  In principle, the categories of shade and water are infinite and ordered; we only observed three levels of water, but the model should be able to make a prediction with a water level intermediate between any two of the observed ones. 
+  *With continuous interactions, the problem isn't so much the infinite part but the ordered part* 
+  To do this, we can reapply the original geocentrism that justifies a linear regression:
+  When we wish to model the mean of the outcome such that it is conditional on the value of a continuous predictor x, we can use a linear model --> 
+  *To make the slope B conditional on yet another variable, we can recursively apply the same trick:*
+
+$$
+\mathrm{\mu_i = \alpha + _{\gamma W_{, i}}W_i + \beta_{S}S_i} \\
+\mathrm{_{\gamma W_{, i}} = \beta_W + \beta_{WS}S_i}
+$$
+Now the second term defines how quickly blooms change with water level. Bw is the rate of change, when shade is at its mean value. Bws is the rate change in the second term as shade changes - the slope for shade on the slope of water. The subscript i for the second term is included because it depends upon the row because S_i
+
+We also want to allow the association with shade B_s, to depend upon water. Luckily, the symmetry of simple interactions allows us this for free. 
+  We can substitute the second term above into the mu equation to get our model:
+  
+$$
+\mathrm{\mu_i = \alpha + _{\gamma W_{, i}}W_i + \beta_{S}S_i} \\
+\mathrm{_{\gamma W_{, i}} = \beta_W + \beta_{WS}S_i} \\ 
+\mathrm{\mu_i = \alpha + (\beta_W + \beta_{WS}S_i)W_i + \beta_{S}S_i} \\ == \\
+\mathrm{\mu_i = \alpha + \beta_W W_i + \beta_{S}S_i + \beta_{WS}S_{i}W_{i}}
+$$
+
+The extra term on the far right end holds the product of the two terms and completes the conventional form of a continuous interaction. 
+
+## Now lets put this to work on the tulips 
+
+The interaction model is as follows: 
+
+$$
+\mathrm{B_i \sim Normal(\mu_i , \sigma)} \\ 
+\mathrm{\mu_i = \alpha + \beta_W W_i + \beta_{S}S_i + \beta_{WS}S_{i}W_{i}}
+$$
+The last thing we need is a prior for this new interaction term. This is hard because these epicycle parameters dont have a clear natural meaning. 
+
+  Suppose the strongest plausible interaction is one where high enough shade reduces water's effect to zero: 
+  
+$$
+\mathrm{_{\gamma W_{, i}} = \beta_W + \beta_{WS}S_i} = 0 
+$$
+
+If we set S_i equal to 1 (the maximum in the sample), then this means the interaction needs to be the same magnitude as the main effect, but reversed: 
+$$
+\mathrm{\beta_{WS} = -\beta_{W}}
+$$
+
+That is the largest conceivable interaction. *So if we set the prior for B_ws to have the same standard deviation as B_w, maybe that isn't ridiculous*
+
+All together now, in code form 
+
+```{r}
+m8.5 <- quap(
+  alist(
+    blooms_std ~ dnorm(mu, sigma),
+    mu <- a + bw*water_cent + bs*shade_cent + bws*water_cent*shade_cent,
+    a ~ dnorm(0.5, 0.25),
+    bw ~ dnorm(0, 0.25),
+    bs ~ dnorm(0, 0.25),
+    bws ~ dnorm(0, 0.25),
+    sigma ~ dexp(1)
+  ), data = d
+)
+```
+
+
+## 8.3.3 Plotting Posterior Predictions 
+
+
+
+
+
+
+
+
+
+
+
+
+## 8M2
+
+
+## 8M3  

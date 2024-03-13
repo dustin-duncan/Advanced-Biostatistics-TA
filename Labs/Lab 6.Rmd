@@ -6,7 +6,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+rm(list = ls())
 library(tidyverse)
 library(rethinking)
 ```
@@ -95,9 +95,45 @@ And now we record our position and add it to the list:
 
 cur_week<-cur_week+1
 ```
+
 #### Question 1
 Run through this process again, you can cut and paste most of it, but make sure you both understand what each bit of code is doing, and the specific outcome you get. Write in text explaining what and why the algorithm is doing.
 
+```{r}
+num_weeks <- 1e5
+
+
+positions <- rep(0,num_weeks)
+
+
+current <- 10
+
+
+for ( i in 1:num_weeks ) {
+  
+  ## record current position
+  positions[i] <- current
+  
+  ## flip coin to generate proposal island
+  proposal <- current + sample( c(-1,1) , size=1 )
+  
+  ## now make sure he loops around the archipelago (cant go bigger than 10)
+  if ( proposal < 1 ) proposal <- 10
+  if ( proposal > 10 ) proposal <- 1
+  
+  ## move?
+  prob_move <- proposal/current
+  
+  # generate a random number between zero and one --> the king moves if this 
+  # Random number is less than the ratio of the proposal island's population to
+  # the current islands population (proposal/current)
+  current <- ifelse( runif(1) < prob_move , proposal , current)
+  
+}
+
+plot( 1:100 , positions[1:100] )
+plot( table( positions ) )
+```
 
 
 
@@ -197,9 +233,9 @@ We can also look at the histograms:
 
 ggplot(data=chains[[1]] , aes(x=location))+
   geom_histogram(bins = 14,fill="red",alpha=0.5)+
-  geom_histogram(data=chains[[2]],bins = 14,fill="blue",alpha=0.5)+
-  geom_histogram(data=chains[[3]],bins = 14,fill="green",alpha=0.5)+
-  geom_histogram(data=chains[[4]],bins = 14,fill="yellow",alpha=0.5)+
+  geom_histogram(data=chains[[2]],bins = 14,fill="blue",alpha=0.5) +
+  geom_histogram(data=chains[[3]],bins = 14,fill="green",alpha=0.5) +
+  geom_histogram(data=chains[[4]],bins = 14,fill="yellow",alpha=0.5) +
   geom_histogram(data=chains[[5]],bins = 14,fill="purple",alpha=0.5)
 ```
 From the sequences or the histograms, what do you see? How do they compare to each other?
@@ -223,5 +259,110 @@ How do you think the algorithm did on this surface?
 
 #### Question 4: Try your own surface
 Make up your own "population size surface". You can make it longer or shorter. Create a set of plots as we did for the other surfaces and guage how well the algorithm was able to match your function.
+
+Creating my own population surface 
+```{r}
+n <- seq(from = 10, to = 500, by = 10)
+
+popsize <- tibble(location = rep(1:50), population = sample(n, 50, replace = T))
+num_islands = nrow(popsize)
+```
+
+Making ggplot 
+
+```{r}
+ggplot(popsize, aes(x=location,y=population)) + geom_line()
+```
+
+```{r, eval=FALSE}
+norm=sum(popsize$population) 
+
+popsize <- mutate(popsize,frequency = population/norm)
+
+sum(popsize$frequency) # good it adds up to one 
+```
+
+
+```{r, eval=FALSE}
+ggplot(popsize, aes(x=location,y=frequency)) + geom_line()
+```
+### Walking through the algorithm by single steps
+
+Start off at island 30 and set the value of current to the current position:
+```{r, eval=FALSE}
+positions <- tibble(week=1,position=30)
+
+current=positions$position
+cur_week=2
+```
+
+First decide to test moving to the left (move of -1) or right (move of +1)
+```{r, eval=FALSE}
+set.seed(378484)
+(flip<-sample( c(-1,1) , size=1 ))
+```
+
+
+
+With this random seed, we move right, i.e. from 30 to 31
+Now get the position of the proposal move
+```{r, eval=FALSE}
+ (proposal <- current + flip)
+
+```
+
+But 31 might not be a real position, because we might have wrapped around the top of our circle of islands, so we check this and figure out that we are going to island 31:
+```{r, eval=FALSE}
+ if ( proposal < 1 ) proposal <- num_islands
+    if ( proposal > num_islands ) proposal <- 1
+
+proposal
+```
+
+Now we calculate the probability of moving, which is one if the proposal island has a larger size, and is the ratio of the population sizes on the islands we are comparing otherwise. First we calculate the ratio of populations sizes:
+```{r, eval=FALSE}
+ (prob_move <- popsize[popsize$location==proposal,]$population / popsize[popsize$location==current,]$population)
+```
+Island 31 is 0.125 as big as island 30, so we have a 12.5% chance of moving to that island.
+
+We move if a random draw (uniform(0,1)) is less than the value of `prob_move`
+```{r, eval=FALSE}
+(current <- ifelse( runif(1) < prob_move , proposal , current ))
+```
+Our random draw was bigger than 0.125, so we stay on island 30.
+
+And now we record our position and add it to the list:
+```{r, eval=FALSE}
+(positions <- rbind(positions,c(cur_week,current)))
+
+cur_week<-cur_week+1
+```
+
+
+```{r}
+num_weeks<-5000
+positions<- tibble(week=seq(num_weeks),location=rep(0,num_weeks)) # make an tibble to record our progress in
+current <- 30 # starting location
+
+for ( i in 1:num_weeks ) {
+  ## record current position
+    positions$location[i] <- current
+  ## flip coin to generate proposal
+    proposal <- current + sample( c(-1,1) , size=1 )
+  ## now make sure he loops around the archipelago
+    if ( proposal < 1 ) proposal <- num_islands
+    if ( proposal > num_islands ) proposal <- 1
+  ## move?
+    prob_move <- popsize[popsize$location==proposal,]$population/popsize[popsize$location==current,]$population
+    current <- ifelse( runif(1) < prob_move , proposal , current )
+}
+```
+
+```{r}
+ggplot(data=positions, aes(x=location))+
+  geom_histogram(bins=50, color = "white")
+  geom_line(data=tibble(location=seq(1:50),count=seq(1:50)) %>%
+              mutate(count=count*num_weeks/norm),inherit.aes = F, aes(x=location,y=count))
+```
 
 

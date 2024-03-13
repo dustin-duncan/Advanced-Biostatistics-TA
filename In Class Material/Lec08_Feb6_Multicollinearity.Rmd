@@ -17,7 +17,7 @@ source("../helper.R")
 # Today's objectives:  
 
 * Perform mutliple regression on simulated data to explore how regression models do and do not capture causal processes.  
-* Use posterior simiulation data to see how models where no slope is different from 0 can still predict data accurately  
+* Use posterior simulation data to see how models where no slope is different from 0 can still predict data accurately  
 * Conduct multiple regression with a real dataset that exhibits multicollinearity   
 
  
@@ -123,16 +123,9 @@ bayesplot::mcmc_areas(extract.samples( m.both.legs) )
 bayesplot::mcmc_intervals(extract.samples( m.both.legs) ) 
 ```
 
-
-Based on this summary of the posterior, do you think this model is able to predict anything? 
-
-
-
 ```{r}
 rethinking::pairs(m.both.legs)
 ```
-
-
 
 ### Check your understanding exercise
 We saw in the pairs plot that b1 and b2 are highly negatively correlated (in the posterior distribution), but that a and sigma are not correlated with other parameters. Check to see how (b1,b2) pairs from opposite corners of the joint distribution predict mean height values. 
@@ -151,7 +144,7 @@ Now create plots of the expected data that would come out of each of the fitted 
 
 
 
-Summarise the simulation data and join it to the original dataset.
+Summarise the simulation data and join it to the orinigal dataset.
 
 ```{r}
 sims.no.legs <- sim_df(m.no.legs, select(d,-index))
@@ -169,7 +162,8 @@ Plot the simulations using the errorbar package.
 ggplot(summarised.sims.no.legs, aes(x=height,y= height))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.height,ymax=upper.height))+
-  ylim(2,20)
+  ylim(2,20)+
+  ylab("Predicted Height")
 
 ```
 
@@ -189,7 +183,8 @@ summarised.sims.left <- group_by(sims.left,index) %>%
 ggplot(summarised.sims.left, aes(x=height,y=height))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.height,ymax=upper.height))+
-  ylim(2,20)
+  ylim(2,20)+
+  ylab("Predicted Height")
 
 ```
 
@@ -209,14 +204,54 @@ summarised.sims.both.legs <- group_by(sims.both.legs,index) %>%
 ggplot(summarised.sims.both.legs, aes(x=height,y=height))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.height,ymax=upper.height))+
-  ylim(2,20)
+  ylim(2,20)+
+  ylab("Predicted Height")
 
 ```
+
 
 ### Model based on average leg length
 Modify the data by adding a column for average leg length (average left and right legs) and difference between left and write leg. Run a multiple regression with those two values as predictors. Do the same check your understanding exercise with this model. How does it differ from before?
 
 
+```{r}
+d2 <- mutate(d, ave_leg=(leg_left+leg_right)/2,leg_diff=leg_left-leg_right)
+```
+
+```{r}
+m.ave.legs <- 
+  quap( alist(
+    height ~ dnorm(mu,sigma),
+    mu <- a + b1 * ave_leg +b2*leg_diff ,
+    a ~ dnorm(10,4),
+    b1 ~ dnorm(0,2),
+    b2 ~ dnorm(0,2),
+    sigma ~ dexp(1) ),
+    data=d2)
+
+
+precis(m.ave.legs)
+```
+
+```{r}
+sims.ave.legs <- sim_df(m.ave.legs, select(d2,-index))
+ 
+summarised.sims.ave.legs <- group_by(sims.ave.legs,index) %>%
+  summarise(mean.height=mean(height),
+            lower.height=quantile(height,0.1),
+            upper.height=quantile(height,0.9))%>%
+  ungroup() %>%
+  left_join(d)
+```
+
+```{r}
+ggplot(summarised.sims.ave.legs, aes(x=height,y=height))+
+  geom_point(color="red")+
+  geom_errorbar(aes(ymin=lower.height,ymax=upper.height))+
+  ylim(2,20)+
+  ylab("Predicted Height")
+
+```
 
 
 ### Collinearity in real data: energy content of milk
@@ -248,8 +283,10 @@ Use this model fit to explore how including the predictor affects our posterior 
 m6.5.full <- quap(
     alist(
         K ~ dnorm( mu , sigma ) ,
-        mu <- ??? ,
-       ???
+        mu <- a + bF*F + bL*L ,
+        a ~ dnorm( 0 , 0.2 ) ,
+        bF ~ dnorm( 0 , 0.5 ) ,
+        bL ~ dnorm( 0 , 0.5 ) ,
         sigma ~ dexp( 1 )
     ) ,
     data=d )
@@ -277,11 +314,14 @@ summarised.sims.m6.5 <- group_by(sims.m6.5,index) %>%
 ggplot(summarised.sims.m6.5, aes(x=K,y=K))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.K,ymax=upper.K))+
-  ylim(-3,3)
+  ylim(-3,3)+
+  ylab("Predicted K")
 
 ```
 
-How much does knowing percent fat affect our predictions? We can run the simulation and set F=0, which says that we use the average fat content of milk in the dataset as the value of the predictor F in our simulation. The model basically performs fine, even though some of these values of L/F combine to make unreasonable (even impossible) species.
+How much does knowing percent fat affect our predictions? We can answer this by leaving out the fat content of species and asking if their lactose levels alone predict the energy content. 
+
+We can run the simulation and set F=0, which says that we use the average fat content of milk in the dataset as the value of the predictor F in our simulation. The model basically performs fine, even though some of these values of L/F combine to make unreasonable (even impossible) species.
 ```{r}
 sims.m6.5.NoFat <- sim_df(m6.5.full, select(d,-index) %>% mutate(F=0))
  
@@ -295,7 +335,8 @@ summarised.sims.m6.5.NoFat <- group_by(sims.m6.5.NoFat,index) %>%
 ggplot(summarised.sims.m6.5.NoFat, aes(x=K,y=K))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.K,ymax=upper.K))+
-  ylim(-3,3)
+  ylim(-3,3)+
+  ylab("Predicted K")
 
 ```
 
@@ -313,7 +354,7 @@ summarised.sims.m6.5.NoLac <- group_by(sims.m6.5.NoLac,index) %>%
 ggplot(summarised.sims.m6.5.NoLac, aes(x=K,y=K))+
   geom_point(color="red")+
   geom_errorbar(aes(ymin=lower.K,ymax=upper.K))+
-  ylim(-3,3)
+  ylim(-3,3)+
+  ylab("Predicted K")
 
 ```
-

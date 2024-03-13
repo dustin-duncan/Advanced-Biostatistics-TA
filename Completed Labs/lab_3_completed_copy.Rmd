@@ -280,6 +280,5 @@ plot(post)
 ```
 
 
-
 ### Extra credit
 Do the same procedure for the other replicates. What can you say is similar or different about the replicates? Are there any anomalies?

@@ -45,17 +45,24 @@ Here we have a model you should be fairly used to, individual effects for each t
 ```{r}
 m13.1 <- ulam(
   alist(
-    surv ~ dbinom( density, p),
-    logit(p) <- a[tank],
-    a[tank] ~ dnorm(0,1.5)
+    surv ~ dbinom( density, p), # probability of survival
+    logit(p) <- a[tank], #logit binomial likelihood function
+    a[tank] ~ dnorm(0,1.5) # Same priors for all tanks
   ),
   data=select(d,surv,density,tank), chains=4, log_lik = TRUE
   )
+# Fitting some value (abar) to the whole data --> when we evaluate a candidate value of abar, we calculate the likelihood the probability of each of these things --> there is going to be a penalty each time there is a big difference between abar and the actual value 
+# Because its fitting each one of them, its going to come up with a value that is closer to the actual observation --> there is going to be some variability
+# Calculate the likelihood of seeing that datapoint, given that value of a that we're sampling, and then the difference between that value and the abar value (of zero)
+# Doing the same thing as separating each of the datasets and fitting them individually 
+# Each tank has its own 'a' which is drawn from the same prior, but any information we get from fitting one tank has no effect on the how we fit the data
 ```
 
 Inspect the summary, there are 48 parameters, and they all have good convergence stats. 
 ```{r}
 precis(m13.1 , depth =2)
+# Calculate the likelihood by using abar and the actual a value 
+
 ```
 
 Compute the WAIC. The effective number of parameters is lower than the true number, but it is more important to know how the number of parameters compares between models. 
@@ -72,12 +79,18 @@ m13.2 <- ulam(
   alist(
     surv ~ dbinom( density, p),
     logit(p) <- a[tank],
-    a[tank] ~ dnorm(abar,sigma),
+    a[tank] ~ dnorm(abar,sigma), ## The thing 'abar' that shows up in the prior for a actually has its own prior 
     abar ~ dnorm(0,1.5),
     sigma ~ dexp(1)
   ),
   data=select(d,surv,density,tank), chains=4, log_lik = TRUE
   )
+## We now have parameters that depend on other parameters 
+## Assuming a random process that fits the lower parameters with the upper parameters 
+ 
+# Assumes that the tank values are drawn from the distribution but we dont know what the distribution is of yet so we're going to learn about the distribution from the data itself
+
+# If we dont know what abar and sigma are then they are now parameters instead of constants that we've fit 
 ```
 ```{r}
 precis(m13.2,depth=2)
@@ -147,6 +160,7 @@ Now lets see what we get when we apply the generative model for the tanks withou
 
 Warning: this code is clunky and roundabout. 
 ```{r}
+## going through the posterior and given abar and sigma for each row in the posterior, simulating all the tank-specific a's and then simulating the number that would survive 
 post13.2 <- extract.samples( m13.2 ) %>% as_tibble() %>%
   select(abar,sigma)
 
@@ -178,6 +192,7 @@ Here are what we got for the first 3 parameter sets from the posterior samples
 ```{r}
 ggplot(filter(ran_eff_sim_out,pindex==1) , aes(x=tank,y=S/n))+geom_point(aes(shape=as.factor(pred),color=as.factor(pred)))
 
+## No relationship between where the high v. low survivorship tanks are, but there is a probability of survival being plotted
 ggplot(filter(ran_eff_sim_out,pindex==2) , aes(x=tank,y=S/n))+geom_point(aes(shape=as.factor(pred),color=as.factor(pred)))
 
 ggplot(filter(ran_eff_sim_out,pindex==3) , aes(x=tank,y=S/n))+geom_point(aes(shape=as.factor(pred),color=as.factor(pred)))
@@ -188,7 +203,7 @@ ggplot(ran_eff_sim_out_sum,aes(x=tank,y=meansurv))+
   geom_ribbon(aes(ymin=lowsurv,ymax=highsurv),fill="red",alpha=0.35)+
   geom_point(data=d , aes(x=tank,y=surv/density))+
   lims(x=c(0,50),y=c(0,1))
-
+# There are some tanks where the 90% PI fell lower, but the range of survivorship probabilities is both large and it captures the range of survivorship probabilities in the data when we dont know whether they came from predator-present or predator-absent tanks 
 ```
 
 
@@ -203,6 +218,7 @@ m13.2.single.a <- ulam(
   ),
   data=select(d,surv,density,tank), cores=4, chains=4 ,iter=6000, log_lik = TRUE
   )
+# We could have a model where all the tanks have the same a or where the distribution for all the tanks 
 ```
 
 ```{r}
@@ -220,6 +236,7 @@ m13.2.small.sigma1 <- ulam(
   ),
   data=select(d,surv,density,tank), cores=4, chains=4 ,iter=3000, log_lik = TRUE
   )
+# Coming back to the situation where there is no variance between tanks, and we get a similar output because the rhat is one and the effective samples are higher than the actual samples 
 ```
 for comparison, the same model but specified differently. It runs much less efficiently.
 ```{r}
@@ -232,6 +249,7 @@ m13.2.small.sigma2 <- ulam(
   ),
   data=select(d,surv,density,tank), cores=4, chains=4 ,iter=3000, log_lik = TRUE
   )
+## And writing this in the multilevel model lowers the number of effective parameters --> good for lower WAIC
 ```
 
 ```{r}

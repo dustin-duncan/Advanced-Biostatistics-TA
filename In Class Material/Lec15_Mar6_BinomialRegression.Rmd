@@ -101,6 +101,12 @@ for ( i in 1:6 ) {
 }
 ```
 
+These are the mean and the range of the sample values (not just probable interval for the mean of that group), it includes the binomial sampling variance. 
+
+The circls are on a line 
+The plusses are not on a line because they take into account how many people applied to a department, so the residual variance.
+  - In the dots where there were high amounts of applicants the plusses are going to
+  be closer together, because there is lower variance
 
 A model that includes both an effect of gender, and an effect of department. Some departments are harder to get into than others, and some departments have more people admitted than others. 
 ```{r}
@@ -116,6 +122,9 @@ m11.8 <- ulam(
 precis( m11.8 , depth=2 )
 ```
 
+
+
+
 ```{r}
 ## R code 11.31
 postcheck( m11.8 )
@@ -129,15 +138,17 @@ for ( i in 1:6 ) {
 }
 ```
 
+Now it has the baseline effect of department, but the effect of gender varies across departments. 
 
 ### Alternative formulations of the same model.
 
 The alternate model where we force the `a` values to be a difference from an "intercept". In this version, `delta` acts as the intercept for each department, and a is the increase in admission rate (on the logit scale) for women.  
 ```{r}
+## This makes the parameters a bit more interpretable. 
 m11.8A <- ulam(
     alist(
         admit ~ dbinom( applications , p ) ,
-        logit(p) <- a*(gid-1)  + delta[dept_id] ,
+        logit(p) <- a*(gid-1)  + delta[dept_id] , # 1 and 2 becomes 0 and 1 (indicator)
         a ~ dnorm( 0 , 1.5 ) ,
         delta[dept_id] ~ dnorm( 0 , 1.5 )
     ) , data=select(d,admit,applications,gid,dept_id) , cores=4, chains=4 , iter=4000,log_lik = TRUE) 
@@ -148,6 +159,8 @@ Compare the intervals and standard deviations of the parameters in the two model
 precis(m11.8, depth=2)
 precis(m11.8A, depth=2)
 ```
+
+The difference between a values is about 0.1 for m11.8. For 11.8A, the total difference is about 0.1, and now the deltas are the means for each department and the a is the difference between male and female. 
 
 Now compare the WAIC of the two models.
 ```{r}
@@ -195,6 +208,8 @@ mcmc_intervals(select(post.11.8A,diff_a))  +
 
 Now make the graph of the contrasts on the probability scale. Because of the logit link you will have to do it for specific departments.
 
+*This information doesn't tell you everything is fair. It says for other reasons, there are more female applicants to departments with lower admission rates. Why? We dont know its not part of the data. But we could say that there is some bias going on thats causing females to apply to departments with lower admission rates for some reason* 
+
 
 ```{r}
 post.11.8 <- extract.samples(m11.8) %>% as_tibble()%>%
@@ -211,6 +226,11 @@ post.11.8 <- extract.samples(m11.8) %>% as_tibble()%>%
 
 mcmc_intervals(select(post.11.8,diff_p_1,diff_p_2,diff_p_3,diff_p_4,diff_p_5,diff_p_6),prob_outer = 0.9) 
 ```
+
+This is a plot to show the probable intervals for the difference between the values on the probability scale. Remember in this model the effect of gender is the same in every department; this is a way of observing what the effect of gender, according to the model, is in each department. For the department that has the lowest acceptance rate, p6, a difference in the a value is going to have a very small difference in the p value because its on the lower end of our binomial curve. 
+
+**We can see that this difference doesn't have an effect on the probability scale** 
+
 
 
 

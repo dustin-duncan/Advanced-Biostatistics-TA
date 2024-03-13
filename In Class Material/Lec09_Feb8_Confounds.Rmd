@@ -8,6 +8,7 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+rm(list = ls())
 library(tidyverse)
 library(rethinking)
 source("../helper.R")
@@ -46,7 +47,7 @@ Try writing out the expression for the posterior probability of $\mu$ using your
 
 Here is the way to write this model for `quap`. Important point is that in our dataframe `loc` has the values 1, 2, and 3. This will fail if they are not integers starting at 1.
 
-How does `quap` know to automatically index `cases` and `pop` but not `mu`? It is because `cases` and `pop` appear in our dataframe as columns, but `mu` does not. i.e. because `mu` is a parameter it is assumed to apply to all lines of data unless otherwise specified. 
+**How does `quap` know to automatically index `cases` and `pop` but not `mu`? It is because `cases` and `pop` appear in our dataframe as columns, but `mu` does not. i.e. because `mu` is a parameter it is assumed to apply to all lines of data unless otherwise specified.** 
 ```{r}
 m.covid <- quap( alist(
   cases ~ dbinom(pop,mu[loc]),
@@ -71,9 +72,25 @@ Construct a new dataset that has observations of covid case numbers at multiple 
 Note that now we want to use county as the index, not `loc`. Make sure you index the counties starting at 1. It is ok that there are more than one entry per county. 
 
 
+```{r}
+ 
+
+covid_cases <- tibble(name=c("Santa Barbara" , "Goleta", "Santa Maria","O","SP","F"), loc=c(1,2,3,1,2,3), pop=c(92100,31100,107000,20379,33751,18731) , cases=c(14721,5079,22741,3638,12180,6913),county=c(1,1,1,2,2,2))
+
+
+```
+
+```{r}
+m.covid <- quap( alist(
+  cases ~ dbinom(pop,mu[county]),
+  mu[county] ~ dunif(0,1)
+) , data=covid_cases 
+)
 
 
 
+precis(m.covid,depth = 2)
+```
 
 ## Post-treatment bias
 In the book, McElreath develops a simulation model for a dataset where plants are treated with a fungicide, and presence of fungus has a causal effect on growth. Here's the model: 
@@ -96,6 +113,7 @@ precis(sim_plant_data)
 
 
 ```
+
 ```{r}
 ggplot(sim_plant_data, aes(x=treatment,y=log(h1/h0),color=as.factor(fungus)))+geom_jitter(width=0.25,height=0)
 ```
@@ -104,7 +122,7 @@ ggplot(sim_plant_data, aes(x=treatment,y=log(h1/h0),color=as.factor(fungus)))+ge
 ### Fitting models with treatment and post-treatment effects
 Construct two quap models to explore the effect of treatment on plant height. One model will include the effect of the fungicide treatment, the other will additionally include the effect of presence of fungus on the plant post-treatment. 
 
-We want to control for growth, but here we have a very specific model. Plants grow by multiplying their original height by a growth factor. Both models should include the effect of original plant height, h0.
+We want to control for growth, but here we have a very specific model. **Plants grow by multiplying their original height by a growth factor.** Both models should include the effect of original plant height, h0.
 
 model 6.7
 $$
@@ -117,9 +135,11 @@ model with treatment and fungus
 ```{r}
 m6.7 <- quap(
     alist(
-      PUT IN THE MODEL HERE
+      h1 ~ dnorm(mu,sigma),
+      mu <- h0*p ,
+      p <- a + bt*treatment + bf*fungus,
         a ~ dlnorm( 0 , 0.2 ) ,
-        bt ~ dnorm( 0 , 0.5 ),
+        bt ~ dnorm( 0.5 , 0.5 ),
         bf ~ dnorm( 0 , 0.5 ),
         sigma ~ dexp( 1 )
     ), data=sim_plant_data )
@@ -138,7 +158,9 @@ model with treatment only
 ```{r} 
 m6.8 <- quap(
     alist(
-         PUT IN THE MODEL HERE
+      h1 ~ dnorm(mu,sigma),
+      mu <- h0*p ,
+      p <- a + bt*treatment ,
         a ~ dlnorm( 0 , 0.2 ),
         bt ~ dnorm( 0 , 0.5 ),
         sigma ~ dexp( 1 )
@@ -182,7 +204,7 @@ summarised.samples.m6.8 <- group_by(samples.m6.8,index) %>%
 
 
 ```{r}
-# take only the 20 data points in the middle that include both treated and untreated plands so we can see what is going on more clearly.
+# take only the 20 data points in the middle that include both treated and untreated plants so we can see what is going on more clearly.
 ggplot(filter(summarised.samples.m6.8,index<20), aes(x=index,y=res.h1))+
   geom_point(color="red")  +
   geom_point(data=filter(summarised.samples.m6.7,index<20), color="green")
@@ -190,4 +212,3 @@ ggplot(filter(summarised.samples.m6.8,index<20), aes(x=index,y=res.h1))+
 ```
 
 We can observe that the model with fungus and treatment has dots that tend to be closer to 0 than the treatment only model. This is telling us that the model with both fungus and treatment tends to be better at prediction (in sample) than the model with only treatment. Look back through the data, and check to see which data points are predicted best by the model with only treatment. Why would this be?
-
