@@ -14,6 +14,7 @@ library(styler)  # styler can automatically style code for you. Use it via the A
 
 # Path to the helper.R file, relative to where your R markdown file is. (The '..' means 'go up a directory')
 source("../helper.R")   
+
 ```
 # Bayesian Statistical Modeling Winter 2024 blah
 # Lab Exercise, Week 4
@@ -81,10 +82,10 @@ Group size (G), area controlled by the group (A), and the food available in a gr
 Let's first fit a model to see how area (A) predicts a fox's weight. In the Latex code below, write out the equations for a linear model for the effect of area on weight and choose parameters for the prior distributions. (We've partially filled this out for you. Add in the ? parts.)
 
 $$
-D_i \sim \mathrm{Normal}(?, ?) \\
-?   = a +bA*A_i \\
-a \sim \mathrm{Normal}(?,?) \\
-bA \sim ? \\
+D_i \sim \mathrm{Normal}(\mu, \sigma) \\
+\mu   = a +bA*A_i \\
+a \sim \mathrm{Normal}(0, 5) \\
+bA \sim \mathrm{Normal}(0, 0.2) \\
 \sigma \sim \mathrm{Exponential}(1) 
 $$
 
@@ -95,7 +96,8 @@ Working with samples from the posterior allows you to account for the posterior 
 
 Now take this model you've just written down and fit it with `quap`. 
 ```{r , eval=FALSE}
-m1 <- quap()
+m1 <- quap( 
+  )
 
 precis(m1)  # Look at the summary
 ```

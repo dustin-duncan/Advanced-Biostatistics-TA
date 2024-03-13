@@ -1,14 +1,16 @@
 ---
-title: "Lab 7"
-author: "Stephen R. Proulx"
+title: "Lab 7 Template"
+author: "Dustin Duncan"
+date: "2024-03-01"
 output: pdf_document
 ---
+
 
 ```{r, setup }
 knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
-install.packages("bmscstan")
-library(bmscstan)
+# install.packages("bmscstan") --> This package might be useful if you're getting errors
+# library(bmscstan)
 library(tidyverse)
 library(rethinking)
 library(bayesplot)
@@ -166,9 +168,8 @@ ggplot(sim_summarized, aes(x=number,y=deaths_mean))+
 A useful technique for post-processing the samples.
 ```{r  }
 ## Another line of code that wouldn't run in the original lab, commented out 
-# tmp<-extract(m.poiss.overall@stanfit) %>% as_tibble()%>%
+# tmp<-sample(m.poiss.overall@cstanfit) %>% as_tibble()%>%
 #   mutate(theta=exp(log_theta) )
-
 
 ## This line of code should work 
 tmp<-extract.samples(m.poiss.overall) %>% as_tibble()%>%
@@ -196,53 +197,27 @@ $$
 \beta \sim \mathrm{Normal(0, 0.1)}
 $$
 
-Running model and checking precis output:
-```{r}
-m.week <- ulam(
-  alist(
-    new_deaths ~ dpois(theta),
-    log(theta) <- a + b * NC,
-    a ~ dnorm(0, 1),
-    b ~ dnorm(0, 0.1)
-  ), data = stan_data, chains = 4, cores = 4, iter=3000, log_lik = TRUE 
-)
-precis(m.week)
-```
-Drawing samples from poisson regression 
-```{r}
-week_out_wide<- rethinking::sim(m.week,data=stan_data, post = extract.samples(object = m.week))
+Run model and checking precis output:
 
-
-ndays <- nrow(stan_data)
-
-week_out<-as_tibble(week_out_wide) %>% 
-  gather( "index","deaths",1:(ndays)) %>%
-  separate(index,c("V","number"),sep=1) %>%
-  mutate(number=as.numeric(number))
-
-week_summarized <- group_by(week_out, number) %>% 
-  summarise(deaths_mean = mean(deaths),
-            deaths_lower = quantile(deaths, 0.05),
-            deaths_upper = quantile(deaths, 0.95)) %>% 
-  ungroup()
-
-```
 
 
 ### Part 2:
 Once you have samples for your model, explain how you can have some confidence that the chains are doing a good job of approximating the posterior distribution.
 
-**We have some confidence that the chains are approximating the posterior distribution because our rhat4 is 1 for each parameter, and our n_eff is higher than the actual number of samples taken**
+*Look at precis output and answer this question from that* 
 
 ### Part 3
 Plot the posterior predictions from the model and compare them to the actual data. What do they consistently capture and what do they consistently miss?
 
-
+*Draw samples from poisson regression: Use the same method as done in example*
 ```{r}
-ggplot(week_summarized, aes(x=number,y=deaths_mean))+
-  geom_point()+
-  geom_errorbar( aes(ymin=deaths_lower,ymax=deaths_upper))+
-  geom_point(data=stan_data, aes(x=indy,y=new_deaths), color="red")
+
+```
+
+
+*Plot the posterior predictions using same method as example*
+```{r}
+
 ```
 
 
@@ -251,165 +226,44 @@ ggplot(week_summarized, aes(x=number,y=deaths_mean))+
 Now build a series of models with prior week's average case numbers as predictors. 
 Compare the WAIC values of the different models. What can you conclude? What possible confounds should you consider before making any conclusions?
 
-*A model with last weeks cases* 
+*A model using this and last weeks cases* 
 ```{r, message=FALSE}
-m.week.1 <- ulam(
-  alist(
-    new_deaths ~ dpois(theta),
-    log(theta) <- a + b_0*W0 + b_1*W1,
-    a ~ dnorm(0, 5),
-    b_0 ~ dnorm(0, 0.1),
-    b_1 ~ dnorm(0, 0.1)
-  ), data = stan_data, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
-)
-precis(m.week.1)
+## All of the next models will follow this scaffold:
 
-week1_out_wide<- rethinking::sim(m.week.1,data=stan_data, post = extract.samples(object = m.week.1))
+## Write ulam model 
 
+## Check precis output 
 
-ndays <- nrow(stan_data)
+## Sampling procedure
 
-week1_out<-as_tibble(week1_out_wide) %>% 
-  gather( "index","deaths",1:(ndays)) %>%
-  separate(index,c("V","number"),sep=1) %>%
-  mutate(number=as.numeric(number))
+## Plot posterior predictions
 
-week1_summarized <- group_by(week1_out, number) %>% 
-  summarise(deaths_mean = mean(deaths),
-            deaths_lower = quantile(deaths, 0.05),
-            deaths_upper = quantile(deaths, 0.95)) %>% 
-  ungroup()
-
-ggplot(week1_summarized, aes(x=number,y=deaths_mean))+
-  geom_point()+
-  geom_errorbar( aes(ymin=deaths_lower,ymax=deaths_upper))+
-  geom_point(data=stan_data, aes(x=indy,y=new_deaths), color="red")
-```
-*A model with the last two weeks cases* 
-```{r}
-m.week.2 <- ulam(
-  alist(
-    new_deaths ~ dpois(theta),
-    log(theta) <- a + b_0*W0 + b_1*W1 + b_2*W2,
-    a ~ dnorm(0, 5),
-    b_0 ~ dnorm(0, 0.1),
-    b_1 ~ dnorm(0, 0.1),
-    b_2 ~ dnorm(0, 0.1)
-  ), data = stan_data, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
-)
-precis(m.week.2)
-
-week2_out_wide<- rethinking::sim(m.week.2,data=stan_data, post = extract.samples(object = m.week.2))
-
-
-ndays <- nrow(stan_data)
-
-week2_out<-as_tibble(week2_out_wide) %>% 
-  gather( "index","deaths",1:(ndays)) %>%
-  separate(index,c("V","number"),sep=1) %>%
-  mutate(number=as.numeric(number))
-
-week2_summarized <- group_by(week2_out, number) %>% 
-  summarise(deaths_mean = mean(deaths),
-            deaths_lower = quantile(deaths, 0.05),
-            deaths_upper = quantile(deaths, 0.95)) %>% 
-  ungroup()
-
-ggplot(week2_summarized, aes(x=number,y=deaths_mean))+
-  geom_point()+
-  geom_errorbar( aes(ymin=deaths_lower,ymax=deaths_upper))+
-  geom_point(data=stan_data, aes(x=indy,y=new_deaths), color="red")
 ```
 
-*A model with the last three weeks cases* 
+*A model with the this weeks, last weeks, and two weeks agos' cases* 
+```{r}
+
+```
+
+*A model with the previous variables + three week old cases included * 
 
 ```{r}
-m.week.3 <- ulam(
-  alist(
-    new_deaths ~ dpois(theta),
-    log(theta) <- a + b_0*W0 + b_1*W1 + b_2*W2 + b_3*W3,
-    a ~ dnorm(0, 5),
-    b_0 ~ dnorm(0, 0.1),
-    b_1 ~ dnorm(0, 0.1),
-    b_2 ~ dnorm(0, 0.1),
-    b_3 ~ dnorm(0, 0.1)
-  ), data = stan_data, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
-)
-precis(m.week.3)
 
-week3_out_wide<- rethinking::sim(m.week.3,data=stan_data, post = extract.samples(object = m.week.3))
-
-
-ndays <- nrow(stan_data)
-
-week3_out<-as_tibble(week3_out_wide) %>% 
-  gather( "index","deaths",1:(ndays)) %>%
-  separate(index,c("V","number"),sep=1) %>%
-  mutate(number=as.numeric(number))
-
-week3_summarized <- group_by(week3_out, number) %>% 
-  summarise(deaths_mean = mean(deaths),
-            deaths_lower = quantile(deaths, 0.05),
-            deaths_upper = quantile(deaths, 0.95)) %>% 
-  ungroup()
-
-ggplot(week3_summarized, aes(x=number,y=deaths_mean))+
-  geom_point()+
-  geom_errorbar( aes(ymin=deaths_lower,ymax=deaths_upper))+
-  geom_point(data=stan_data, aes(x=indy,y=new_deaths), color="red")
 ```
 
 
 *Finally - last four weeks cases* 
 
 ```{r}
-m.week.4 <- ulam(
-  alist(
-    new_deaths ~ dpois(theta),
-    log(theta) <- a + b_0*W0 + b_1*W1 + b_2*W2 + b_3*W3 + b_4*W4,
-    a ~ dnorm(0, 5),
-    b_0 ~ dnorm(0, 0.1),
-    b_1 ~ dnorm(0, 0.1),
-    b_2 ~ dnorm(0, 0.1),
-    b_3 ~ dnorm(0, 0.1),
-    b_4 ~ dnorm(0, 0.1)
-  ), data = stan_data, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
-)
-precis(m.week.4)
 
-week4_out_wide<- rethinking::sim(m.week.4,data=stan_data, post = extract.samples(object = m.week.4))
-
-
-ndays <- nrow(stan_data)
-
-week4_out<-as_tibble(week4_out_wide) %>% 
-  gather( "index","deaths",1:(ndays)) %>%
-  separate(index,c("V","number"),sep=1) %>%
-  mutate(number=as.numeric(number))
-
-week4_summarized <- group_by(week4_out, number) %>% 
-  summarise(deaths_mean = mean(deaths),
-            deaths_lower = quantile(deaths, 0.05),
-            deaths_upper = quantile(deaths, 0.95)) %>% 
-  ungroup()
-
-ggplot(week4_summarized, aes(x=number,y=deaths_mean))+
-  geom_point()+
-  geom_errorbar( aes(ymin=deaths_lower,ymax=deaths_upper))+
-  geom_point(data=stan_data, aes(x=indy,y=new_deaths), color="red")
 ```
-```{r}
-exp(-0.11) # Probability of
-exp(0.19)
-exp(0.02)
-exp(0.01)
-exp(0.02)
-exp(0.20)
-```
-Each unit increase in the predictor multiplies the odds of the outcome occurring by exp(coeff). 
 
+*Each unit increase in the predictor multiplies the odds of the outcome occurring by exp(coeff).* 
+
+
+*Compare the WAIC values for each model*
 ```{r}
-compare(m.week, m.week.1, m.week.2, m.week.3, m.week.4, func = WAIC)
+
 ```
 
 
