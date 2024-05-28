@@ -30,14 +30,24 @@ d <- "https://github.com/jimclarkatduke/gjam/blob/master/forestTraits.RData?raw=
 source_data(d)
 xdata <- forestTraits$xdata[,c(1,2,7,8)]
 formula <- as.formula( ~ temp + deficit + soil )
+
 y  <- gjamReZero(forestTraits$treesDeZero)  # extract y
+
 treeYdata  <- gjamTrimY(y,10)$y             # at least 10 plots
 dim(treeYdata)
 treeYdata[1:5,1:6]
-ml   <- list( ng = 2500, burnin = 500, typeNames = 'DA', 
+
+ml   <- list( ng = 2500, 
+              burnin = 500, 
+              typeNames = 'DA', 
               reductList = list(r = 8, N = 20) )
+
 form <- as.formula( ~ temp*deficit + I(temp^2) + I(deficit^2) )
-out  <- gjam(form, xdata = xdata, ydata = treeYdata, modelList = ml)
+
+out  <- gjam(form, # Formula
+             xdata = xdata, # Xdata 
+             ydata = treeYdata, # New y data
+             modelList = ml) # Model parameters given as list in ml (?)
 ```
 
 ```{r}

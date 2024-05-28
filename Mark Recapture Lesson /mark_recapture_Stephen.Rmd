@@ -33,7 +33,7 @@ model {
 
 stanfile<- cmdstanr::write_stan_file(scode)
 
-
+?cmdstan_model
 #Compile the stan program
  
 mod_markcapture <- cmdstanr::cmdstan_model(stanfile)
@@ -166,7 +166,8 @@ cjs_ind_raneff$summary(variables = c("mean_phi","mean_p","sigma"))
 My modified stan code to include a cofactor (size)
 
 ```{r}
-mod_markselection <- cmdstan_model(stan_file="cjs_cofactor.stan")
+
+mod_markselection <- cmdstanr::cmdstan_model(stan_file="cjs_cofactor.stan")
 
 ```
 simulation from the package
@@ -254,6 +255,5 @@ results$summary(variables = c("mean_phi","mean_p","beta_size"))
 ```
 
 ```{r}
-
 bayesplot::mcmc_pairs(results$draws(variables = c("mean_phi","mean_p","beta_size")))
 ```
