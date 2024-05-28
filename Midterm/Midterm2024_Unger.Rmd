@@ -1,0 +1,312 @@
+---
+title: "Midterm2024"
+author: "Matthew Unger"
+date: "2024-02-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+source("../helper.R")
+
+link_df <- function( fit , data  , ... ) {
+  require(dplyr)
+  
+  #remove this later
+  #fit <- quap_model_test
+  #data <- d2
+  
+  
+  #How many formulas are we working with?  
+  num_formulas = length(fit@links)
+  
+  #tibble of formula variable names
+  varnames<- tibble(names=rep("null",num_formulas))
+  for(i in 1:num_formulas){
+    varnames$names[[i]] <- fit@links[[i]][[1]]
+  }
+  
+  
+  
+  #Explicitly index the data so we can use the index to collect results later
+  data_indexed <<- as_tibble(data) %>%
+    rowid_to_column("index") 
+  
+  
+  #do the linking
+  link_output <- as_tibble(link(fit,data=data,...))
+  
+  if(num_formulas==1){
+    #create a conversion table
+    convert_tib <- tibble(key=colnames(as_tibble(link_output)),index=data_indexed$index)
+    
+    #reshape the link output
+    my_data <- list()
+    for(i in varnames$names){
+      tmp=as_tibble( link_output  ) %>%
+        gather(1:ncol(link_output ),key="key",value ="linked_value") %>%
+        inner_join(convert_tib,"key") %>%
+        inner_join(data_indexed,"index") %>%    
+        rename(!!i :=  linked_value)
+      
+      my_data[[i]] <- tmp
+    }
+    
+    
+    for(i in varnames$names[[1]]){
+      joined_dat=as_tibble( my_data[[i]] ) %>%
+        select(-i)}
+    
+    for(i in varnames$names){
+      joined_dat <- bind_cols(joined_dat,select(my_data[[i]],i))
+    }
+    
+    
+  }
+  
+  if(num_formulas>1){ 
+    #create a conversion table
+    convert_tib <- tibble(key=colnames(as_tibble(link_output[[1]])),index=data_indexed$index)
+    
+    #reshape the link output
+    my_data <- list()
+    for(i in varnames$names){
+      tmp=as_tibble( link_output[[i]] ) %>%
+        gather(1:ncol(link_output[[1]]),key="key",value ="linked_value") %>%
+        inner_join(convert_tib,"key") %>%
+        left_join(data_indexed,"index") %>%    
+        rename(!!i :=  linked_value)
+      
+      my_data[[i]] <- tmp
+    }
+    
+    
+    for(i in varnames$names[[1]]){
+      joined_dat=as_tibble( my_data[[i]] ) %>%
+        select(-i)}
+    
+    for(i in varnames$names){
+      joined_dat <- bind_cols(joined_dat,select(my_data[[i]],i))
+    }
+    
+  }
+  #return the tibble
+  select(joined_dat ,-key)
+  
+  
+  
+}
+``` 
+
+
+## Short Awnswer 
+
+### Question 1 (6 pts)
+Recall your Bayesian data analysis mantra. 
+
+Part A)
+Write it out in word format:
+
+  * Posterior equals the likelihood times the prior all divided by the normalization term
+
+Part B)
+Write it out in probability statement format (i.e. Pr(B|A) etc):
+
+  * Pr( p | d) = Pr( d | p) * Pr( p ) / Pr( d )
+
+### Question 2 (6 pts)
+What are the 3 sections that we can use to mathematically describe a Bayesian model?  
+
+  * Likelihood -- probability of our data given the parameters Pr(d | a)
+  * Transformation -- optional, this is how we can do linear models and estabilsh     definite relationships .
+  * Prior -- These are the beliefs we hold prior to updating our model
+
+### Question 3 (6 pts)
+Your friend shows you a dataset from their experiment in astral zenobiology. They have 20 independent observations of the mental life-force of virtual lifeforms, and they insist that due to their knowledge of the system, the appropriate distribution for the observations is the Sakanaesse distribution, defined as $S(y | \mu,\theta)$ (here we are defining the probability (or likelihood) of seeing a value $y$ given two parameters $\mu$ and $\theta$). 
+
+The data you are given are in a table where column $y$ is the observed value, so $y_i$ is the value for individual observation $i$. 
+
+Part A) Write out the likelihood formula for these data.
+
+  yi = = Sakanaessee(mu, theta)
+
+Part B) Write out the likelihood formula on the log scale, i.e. $log( Pr(y|\mu,\theta) )$
+
+  log(Sakanaessee(yi, mu, theta)) -> yi = Sakanaessee(mu , theta, log=TRUE)
+  
+
+
+## Analysis Challenge (82 points)
+
+For this midterm exercise we will use data from this paper:  https://onlinelibrary.wiley.com/doi/10.1111/oik.07674 . We will use only a portion of their data, but our analysis will involve similar models to the ones discussed in the paper. You are free to read the paper or look to it for modeling inspiration, but you can complete this entire exercise without looking at the paper. 
+
+
+In this study, clown fish were observed in breeding groups associated with sea anemones. In the dataset, each row is an observation.
+
+The dataframe has 236 observations of 61 unique fish groups (labeled by Anemone_ID). Anemone size is taken to represent the food-richness of the area the fish live in, so anemone size might influence fish health and therefore fish reproductive output. 
+
+The dataset includes a treatment, which is that some of the groups of fish were fed additional food. The column "FedIndex" is 1 if the fish were not fed, and 2 if they were fed. The treatment was performed in the middle of the season, so that some clutches of eggs were produced before the treatment, and others were produced after the treatment. The column "PostTreatment" is 1 if the clutch was laid before the treatment and 2 if it was after. Note that fish in the FedIndex=1 category were never fed additional food, even if PostTreatment=2. 
+
+First clear your working environment and load the data.
+```{r}
+rm(list=ls())
+
+load("ClownFishData.RData")
+
+```
+
+You now have an object called "data" in your environment. Take a few minutes to inspect it.
+
+### (1) Standardize and plot
+We will be using anemone_area as a predictor. Since it is a continuous variable, it's a good idea to standardize it. Name the standardized version of this column "AA".
+
+```{r}
+
+data$AA <- standardize(data$anemone_area)
+
+```
+
+```{r}
+#view(data)
+```
+
+Make a figure showing the relationship between anemone area and number of eggs laid.
+```{r}
+ggplot( data, aes(x=AA ,y=Eggs_Laid )) + geom_point()
+```
+
+### (2) Plotting a prior
+You will construct a linear regression model for the number of eggs laid with the anemone area (standardized) as the predictor. The model is
+
+$$
+\mathrm{Eggs\_Laid} \sim \mathrm{Normal(\mu,\sigma)}\\
+\mu = a + b * \mathrm{AA} \\
+a \sim \mathrm{Normal(400,150)} \\
+b \sim \mathrm{Normal(0,200)} \\
+\sigma \sim \mathrm{Exponential(0.01)} \\
+$$
+
+Plot the prior with the data. Explain what makes this a reasonable prior.
+
+```{r}
+
+n=length(data$AA)
+prior_sim <- tibble( a=rnorm(n,mean=400,sd=150), b = rnorm(n,mean=0, sd=200), sigma=dexp(n, 0.01)) %>%
+  mutate(y=rnorm(n(),mean=a + (b * data$AA), sd=sigma)) 
+
+ggplot(data=prior_sim, aes(x=y))+ geom_density()
+
+```
+Most of our values will be 0 or above, which makes sense if we are talking about eggs laid. Some values are negative and I could fix that, but this encompasses most if not all possible number of eggs and so it will be good enough for our Bayesian model.
+
+### (3) Linear regression model
+Construct a *quap* model for the data and use `precis` to summarize the output. 
+
+```{r}
+
+predictEgg <- quap(alist(
+  Eggs_Laid ~ dnorm(mu, sigma),
+  mu <- a + bA * AA,
+  a ~ dnorm(400,150),
+  bA ~ dnorm(0,200),
+  sigma ~ dexp(0.01)
+), data=data, start = list(a=250,bA=65,sigma=140))
+  
+precis(predictEgg)
+
+```
+
+The *quap* is a bit sensitive with these data, so it helps to specify the initial conditions. Use `start = list(a=250,b=65,sigma=140)` as an option for *quap*.
+
+### (4) Explain the precis output
+
+Our model predicts that for every 1 unit increase in anemone area, approximately 68 more eggas will be layed. 89% of the posterior density lies between the values of 53.76 and 82.54. If there exists an anemone area of zero (not possible in the real world), we would expect 267 eggs to be layed. 
+
+### (5) Plot the linear regression lines
+Use `link_df` to create samples of the *quap* fit. To do this, create a dataframe with evenly spaced out values of AA. Plot the mu values on a graph with the data. 
+```{r}
+seq_AA = seq(from = -2, to = 2, length.out = 30)
+samples_post_predictEgg <- link_df(predictEgg, data = list(AA = seq_AA))
+
+summarize_samples_post_predictEgg <- group_by(samples_post_predictEgg, AA) %>%
+  summarize(
+    mean_mu = mean(mu),
+    lower_mu = quantile(mu, 0.10),
+    upper_mu = quantile(mu, 0.90)
+  ) %>%
+ungroup()
+
+ggplot(data = data, aes(x = AA, y = Eggs_Laid)) +
+  geom_point() +
+  geom_ribbon(
+    data = summarize_samples_post_predictEgg, inherit.aes = FALSE,
+    aes(x = AA, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) +
+  geom_line(
+    data = summarize_samples_post_predictEgg, inherit.aes = FALSE,
+    aes(x = AA, y = mean_mu, ), color = "red"
+  )
+
+
+
+```
+
+### (6) List one "big world" explanations for why the data show more variability than the model fit does.
+
+A possible explanation for the variability is that each anemone has different intrinsic reproductive behaviors -- some perhaps focus on fewer off spring but more investment, others. have more regardless of what resources are available. 
+
+### (7) Including the treatment effect 
+Split the data into two datasets, one for fish who received the treatment, and the other for fish who did not receive the treatment. 
+
+You will analyze each of these datasets with a multivariate model that builds on your prior model. In addition to the effect of anemone size, include an effect based on whether or not the clutch of eggs was laid before or after the feeding occurred (remember PostTreatment=1 before feeding, and 2 after feeding). 
+
+For each dataset, perform the quap fit and use `precis` to summarize the results.
+
+```{r}
+
+noFed <- filter(data, FedIndex == 1)
+yesFed <- filter(data, FedIndex == 2)
+
+```
+
+Not Fed Treatment Group:
+
+```{r}
+
+notFedModel <- quap(alist(
+  Eggs_Laid ~ dnorm(mu, sigma),
+  mu <- a + (ba * AA) + (bp * PostTreatment),
+  a ~ dlnorm(400, 150),
+  ba ~ dnorm(0,200),
+  bp ~ dnorm(0,10),
+  sigma ~ dexp(0.01)
+  ), data=noFed, start = list(a=250,ba=65,bp=10,sigma=140))
+
+precis(notFedModel)
+```
+
+
+```{r}
+
+FedModel <- quap(alist(
+  Eggs_Laid ~ dnorm(mu, sigma),
+  mu <- a + (ba * AA) + (bp * PostTreatment),
+  a ~ dlnorm(400, 150),
+  ba ~ dnorm(0,200),
+  bp ~ dnorm(0, 10),
+  sigma ~ dexp(0.01)
+  ), data=yesFed, start = list(a=250,ba=65,bp=10,sigma=140))
+
+precis(FedModel)
+
+```
+
+### (8) Interpret the quap fits. What can you say about how the two datasets differ from each other in terms of their response to anemone size and to pre/post treatment?
+
+In the pre-treatment (not fed), Post/Pre Treatment egg laying seems to have a stronger relationship in predicting number of eggs layed. After the treatment, the significance of Post/Pre Treatment as a predictor goes down. 
+
+This is also reflected in sigma, or the width of our posterior. In the not fed group, our posteriors distribution is less broad, making this model a better predictor of number of eggs layed compared to after feeding, where the standard deviation is larger. 
+

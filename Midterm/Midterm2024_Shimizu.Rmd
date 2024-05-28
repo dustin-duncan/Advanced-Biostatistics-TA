@@ -1,0 +1,229 @@
+---
+title: "Midterm2024"
+author: "Jenny Shimizu"
+date: "2024-02-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+source("../helper.R")
+
+``` 
+
+
+
+
+
+## Short Awnswer 
+
+### Question 1 (6 pts)
+Recall your Bayesian data analysis mantra. 
+
+Part A)
+Write it out in word format:
+The posterior probability is equal to the likelihood times the prior which is divided by the normalization.
+
+
+Part B)
+Write it out in probability statement format (i.e. Pr(B|A) etc):
+Pr(B|A) = Pr(A|B) * Pr(B) / Pr(A|B) * Pr(B) + Pr(B|A) * Pr(A)
+
+
+
+### Question 2 (6 pts)
+What are the 3 sections that we can use to mathematically describe a Bayesian model?  
+The 3 sections of a Bayesian model is the likelihood function, transformation among variables, and prior distributions for each independent variable.
+
+
+
+### Question 3 (6 pts)
+Your friend shows you a dataset from their experiment in astral zenobiology. They have 20 independent observations of the mental life-force of virtual lifeforms, and they insist that due to their knowledge of the system, the appropriate distribution for the observations is the Sakanaesse distribution, defined as $S(y | \mu,\theta)$ (here we are defining the probability (or likelihood) of seeing a value $y$ given two parameters $\mu$ and $\theta$). 
+
+The data you are given are in a table where column $y$ is the observed value, so $y_i$ is the value for individual observation $i$. 
+
+Part A) Write out the likelihood formula for these data.
+yi ~ S(mui, theta)
+
+
+
+Part B) Write out the likelihood formula on the log scale, i.e. $log( Pr(y|\mu,\theta) )$
+Pr(y|mu,theta) = summation(S(yi, mu, theta)
+
+
+
+
+## Analysis Challenge (82 points)
+
+For this midterm exercise we will use data from this paper:  https://onlinelibrary.wiley.com/doi/10.1111/oik.07674 . We will use only a portion of their data, but our analysis will involve similar models to the ones discussed in the paper. You are free to read the paper or look to it for modeling inspiration, but you can complete this entire exercise without looking at the paper. 
+
+
+In this study, clown fish were observed in breeding groups associated with sea anemones. In the dataset, each row is an observation.
+
+The dataframe has 236 observations of 61 unique fish groups (labeled by Anemone_ID). Anemone size is taken to represent the food-richness of the area the fish live in, so anemone size might influence fish health and therefore fish reproductive output. 
+
+The dataset includes a treatment, which is that some of the groups of fish were fed additional food. The column "FedIndex" is 1 if the fish were not fed, and 2 if they were fed. The treatment was performed in the middle of the season, so that some clutches of eggs were produced before the treatment, and others were produced after the treatment. The column "PostTreatment" is 1 if the clutch was laid before the treatment and 2 if it was after. Note that fish in the FedIndex=1 category were never fed additional food, even if PostTreatment=2. 
+
+First clear your working environment and load the data.
+```{r}
+#rm(list=ls())
+
+load("ClownFishData.RData")
+```
+
+You now have an object called "data" in your environment. Take a few minutes to inspect it.
+
+
+
+
+### (1) Standardize and plot
+We will be using anemone_area as a predictor. Since it is a continuous variable, it's a good idea to standardize it. Name the standardized version of this column "AA".
+```{r}
+#Standardizing the anemone_area
+
+data$AA <- standardize(data$anemone_area)
+```
+
+
+Make a figure showing the relationship between anemone area and number of eggs laid.
+```{r}
+ggplot( data , aes(x=AA ,y=Eggs_Laid )) +geom_point()
+```
+
+### (2) Plotting a prior
+You will construct a linear regression model for the number of eggs laid with the anemone area (standardized) as the predictor. The model is
+
+$$
+\mathrm{Eggs\_Laid} \sim \mathrm{Normal(\mu,\sigma)}\\
+\mu = a + b * \mathrm{AA} \\
+a \sim \mathrm{Normal(400,150)} \\
+b \sim \mathrm{Normal(0,200)} \\
+\sigma \sim \mathrm{Exponential(0.01)} \\
+$$
+Plot the prior with the data. Explain what makes this a reasonable prior.
+```{r}
+#making model
+m1 <- quap( 
+  alist(
+    Eggs_Laid ~ dnorm(mu, sigma),
+    mu <- a +  b * AA,
+    a ~ dnorm(400,150),
+    b ~ dnorm(0,200),
+    sigma ~ dexp(0.01)
+    ), data=data, start= list(a=250,b=65,sigma=140)
+  )
+
+#plotting prior predictive simulation
+prior <- extract.prior(m1)
+seq_AA <- seq(from = -2, to = 2, length.out = 30) 
+samples_prior_m1 <- link_df(m1, data = list(AA = seq_AA), post = prior)
+
+#ggplot(data = samples_prior_m1, aes(x = AA, y = mu)) +
+  geom_point(alpha = .05)
+
+```
+This is a reasonable prior because the resulting likelihood is evenly spaced and has reasonable values. 
+
+### (3) Linear regression model
+Construct a *quap* model for the data and use `precis` to summarize the output. 
+```{r}
+#Constructing quap model for data
+m1 <- quap( 
+  alist(
+    Eggs_Laid ~ dnorm(mu, sigma),
+    mu <- a +  b * AA,
+    a ~ dnorm(400,150),
+    b ~ dnorm(0,200),
+    sigma ~ dexp(0.01)
+    ), data=data, start= list(a=250,b=65,sigma=140)
+  )
+
+#Precis to summarize
+precis(m1)
+```
+
+The *quap* is a bit sensitive with these data, so it helps to specify the initial conditions. Use `start= list(a=250,b=65,sigma=140)` as an option for *quap*.
+
+### (4) Explain the precis output
+The precis output shows that mean is around that of the starting conditions applied. The interval for each is relatively broad as well.
+
+### (5) Plot the linear regression lines
+Use `link_df` to create samples of the *quap* fit. To do this, create a dataframe with evenly spaced out values of AA. Plot the mu values on a graph with the data. 
+```{r}
+#Creating samples of quap fit
+seq_AA <- seq(from = -2, to = 2, length.out = 30) 
+samples_post_m1 <- link_df(m1, data = list(AA = seq_AA))
+
+summarize_samples_post_m1 <- group_by(samples_post_m1, AA) %>%
+  summarize(
+    mean_mu = mean(mu),
+    lower_mu = quantile(mu, 0.10),
+    upper_mu = quantile(mu, 0.90)
+  ) %>%
+  ungroup()
+
+#graph of AA with Eggs Laid points against the mu values
+ggplot(data = data, aes(x = AA, y = Eggs_Laid)) +
+  geom_point() +
+  geom_ribbon(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = AA, ymin = lower_mu, ymax = upper_mu), alpha = 0.5, fill = "blue"
+  ) +
+  geom_point(
+    data = summarize_samples_post_m1, inherit.aes = FALSE,
+    aes(x = AA, y = mean_mu, ), color = "blue"
+  )
+```
+
+
+### (6) List one "big world" explanations for why the data show more variability than the model fit does.
+One "big world" explanation that would cause the data to show more variability is that the eggs laid could be affected by other factors such as the treatment done with the food. The model above is only taking into account the anenome size and not the aditional variability of getting fed extra food or not. As a result the data will have more variability becuase of this additional factor. 
+
+
+### (7) Including the treatment effect 
+Split the data into two datasets, one for fish who received the treatment, and the other for fish who did not receive the treatment. 
+
+You will analyze each of these datasets with a multivariate model that builds on your prior model. In addition to the effect of anemone size, include an effect based on whether or not the clutch of eggs was laid before or after the feeding occurred (remember PostTreatment=1 before feeding, and 2 after feeding). 
+
+For each dataset, perform the quap fit and use `precis` to summarize the results.
+
+```{r}
+#Splitting dataset
+data_treatment1 <- data[data$FedIndex %in% c("1"),] #data with not fed (treatment 1)
+data_treatment2 <- data[data$FedIndex %in% c("2"),] #data with fed (treatment 2)
+
+#Multivariate model
+#Didn't have time to fix model but would need to include mu[PostTreatment](?) to separate out if had post treatment or not. Would want to get precis to have two separate mu's with post treatment 1 and 2 then the values for each. Couldn't figure out how to separate them out while also including the anenome size.
+
+#Treatment 1 model
+m_treatment1 <- quap(
+    alist(
+      Eggs_Laid ~ dnorm(mu,sigma),
+      mu <- a + bt*PostTreatment + bAA*AA,
+      a ~ dnorm( 400 , 150 ) ,
+      bt ~ dnorm( 1.5 , 1 ),
+      bAA ~ dnorm( 0 , 200 ),
+      sigma ~ dexp( 0.01 )
+    ), data=data_treatment1, start= list(a=250,bAA=65,sigma=140) )
+
+precis(m_treatment1)
+
+#Treatment 2 model
+m_treatment2 <- quap(
+    alist(
+      Eggs_Laid ~ dnorm(mu,sigma),
+      mu <- a + bt*PostTreatment + bAA*AA,
+      a ~ dnorm( 400 , 150 ) ,
+      bt ~ dnorm( 1.5 , 1 ),
+      bAA ~ dnorm( 0 , 200 ),
+      sigma ~ dexp( 0.01 )
+    ), data=data_treatment2, start= list(a=250,bAA=65,sigma=140) )
+
+precis(m_treatment2)
+```
+
+### (8) Interpret the quap fits. What can you say about how the two datasets differ from each other in terms of their response to anemone size and to pre/post treatment?
+The two datasets differ from each other in their response to anemone size and post treatment by the amount of eggs laid was smaller when food was not given prior than if it was given afterwards. 

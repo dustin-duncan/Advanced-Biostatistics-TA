@@ -1,0 +1,379 @@
+---
+title: "Final Assessment"
+author: "Stephen R. Proulx"
+date: "3/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rethinking)
+library(bayesplot)
+source("../helper.R")
+```
+
+
+# Short Awnswer
+
+## Question 1
+
+Consider this dataset where $y$ is the number of eggs laid by individual fruit flies who are put into vials with $x$ microliters of yeast paste. 
+```{r}
+data <- tibble( y = c(35,43,54,33,65,54,72,55,66), x = c(5,5,5,10,10,10,15,15,15))
+str(data)
+```
+
+What's wrong with this ulam model specification?
+```{r, eval=FALSE}
+model <- ulam(alist(
+  y ~ dbinom(total, mu),
+  mu <- a + b* x,
+  a ~ dnorm(0,3),
+  b ~ dnorm(0,1),
+) ,  data=data)
+```
+
+### A: 
+
+This ulam notation is not specifying the correct distribution of parameters based off of the notation. It is attempting to write a multilevel model without the proper interactions and prior specifications for the transformation after the likelihood, as well as subsetting a column that doesn't exist in the data (total).  
+
+## Question 2
+
+ The dataframe has a column $y$ that are body length measurements for a species of lizard. Column $x_1$ is 0 for male lizards and 1 for female lizards. Column $x_2$ is 0 for brown throated lizards and 1 for green throated lizards. We add another 4 columns that are indicator variables for each of the 4 states that a lizard can be in (male/female X brown/green), defining $x_{i,j}=1$ if $x_1=i$ and $x_2=j$.   
+ 
+Below are three model definitions (partial definitions, I have not written out the priors).
+
+Model 1
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu = a + b_1 x_1 + b_2 x_2
+$$
+Model 2
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu = a + b_1 x_1 + b_2 x_2 + b_{12} x_1 x_2
+$$
+Model 3
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu =  b_{0,0} x_{0,0} + b_{0,1} x_{0,1} + b_{1,0} x_{1,0} + b_{1,1} x_{1,1}
+$$
+
+### Which of these models can be considered models with interaction? Explain why.
+
+### A:
+
+Model number one does not include an interaction, because each of the slopes are affected by only their respective variable value, rather than being affected by another variable.
+
+The second model can be considered a model with an interaction because of the third term in the transformation allows the effect of b_1 to differ based off of the x_2 value, and for the effect of b_2 to differ based off of the x_1 value.
+
+The third model is not an interaction model, because the effect of each of the different slopes does not change based off of more than one variable. Each slope correlates to its own variable (x value).
+
+
+
+#### Consider these values for the means of categories below: 
+
+sex   color    mean length    
+----- -------  --------------
+M      B         13
+M      G         15
+F      B         16
+F      G         20
+
+Can you choose values of the parameters for each of the three models that would have the mean, $\mu$, be equal to these mean values in each category? 
+
+### A: 
+
+We can choose values for parameters that will estimate the mean from the data, based off of each of the conditions. Since the model would be based off of a distribution centered around the mean, it will likely include the mu value but the actual mean of the model would be slightly different. In addition, if our model were taken using a log distribution of the data, it would be centered around zero rather than the actual mean.
+
+### Question 3
+
+Consider this dataset:
+```{r}
+data <- tibble( x=seq(1,10),y=c(4.4,6.0,4.2,6.9,5.4,3.3,1.1,2.7,1.3,5.5))
+
+ggplot(data,aes(x=x,y=y))+ 
+  geom_point()+
+  ylim(0,10)
+```
+
+Here are two potential models to fit these data:
+```{r, eval=FALSE}
+m.1 <- ulam(alist(
+  y ~ dnorm(mu, sigma),
+  mu <- a + b1*x,
+  a ~ dnorm(5,2.5),
+  b1 ~ dnorm(0,1),
+  sigma ~ dexp(1)
+))
+```
+
+```{r, eval=FALSE}
+m.2 <- ulam(alist(
+  y ~ dnorm(mu, sigma),
+  mu <- a + b1*x + b2*x^2 + b3*x^3,
+  a ~ dnorm(5,2.5),
+  b1 ~ dnorm(0,1),
+  b2 ~ dnorm(0,1),
+  b3 ~ dnorm(0,1),
+  sigma ~ dexp(1)
+))
+```
+
+(A) After fitting the models you can compute the probability of observing the data given the parameters. Which model do you expect to fit the data best, and why?
+
+### A:
+
+I would expect the second model to fit the data best because the third term in the transformation gives it more flexibility to account for the variance in the data.
+
+(B) Now consider this additional point is discovered and added to the dataset. Which model do you expect will fit this dataset better and why?
+```{r}
+data <- tibble( x=seq(1,10),y=c(4.4,6.0,4.2,6.9,5.4,3.3,1.1,2.7,1.3,5.5))
+new_data <- tibble( x=c(7), y= c(5.0) )
+
+ggplot(data,aes(x=x,y=y))+ 
+  geom_point()+
+  geom_point(data=new_data,color="red")+
+  ylim(0,10)
+```
+
+### A: 
+
+From this new datapoint, the distribution seems to follow a more linear distribution, so I would expect the first model to be able to account for more of the variance between the datapoints, whereas the second model would likely overfit the data.
+
+## Analaysis Challenge
+
+These data are part of a study conducted by Kelly Thomasson in my lab that involved evolving yeast for that were being passaged through fruit flies. The yeast were divided into replicate populations that evolved under "control" conditions (no flies), or under "treatment" conditions (with flies). After evolution, she performed an assay to see if the production of spore cells relative to vegetative cells had evolved. To do this, she counted the number of cells that were spores and the number that were vegetative. 
+
+In the dataset I am providing, there are two strains of yeast, "AM" from an american oak forrest, and "WE", a european wine production strain. Both of these strains were assayed for sporulation before evolution, this is the "ancestral" treatment. For the ancestral treatment, they were assayed 12 times each.
+
+In the evolution treatments, each strain was split into 4 populations that evolved independently, and then each strain was assayed 4 times. In the dataset, "unique_replicate_id" uniquely identifies each observation of a group of cells. 
+
+Come up with an approach to analyzing these data, with an eye towards determining what effect the evolution treatment has and whether or not the strains differ in the way they evolved. Discuss the results both on the logit scale and on the probability scale. 
+
+Testing evolution based off of two treatments: control (no flies), treatment (with flies)
+
+Ancestral treatment: testing sporulation before evolution (this is what we're comparing to, seeing if there's a significant difference)
+
+Evolution treatment on yeast: 4 populations, each assayed 4 times --> represented by "unique_replicate_id"
+
+
+
+### Load the data 
+
+Load the data and create indicator and index columns for the yeast strain and experimental treatment.
+```{r}
+load("sporedata.RDS")
+
+spore_data <- spore_data %>%
+  mutate(strain_WE_indicator = (strain=="AM")*0 + (strain=="WE")*1,
+         strain_AM_indicator = (strain=="AM")*1 + (strain=="WE")*0,
+         strain_index = (strain=="AM")*1 + (strain=="WE")*2,
+         treat_index = (treatment.type == "ancestral")*1+(treatment.type == "control")*2+(treatment.type == "treatment")*3,
+         total=spore_count+veg_count)
+```
+
+
+Have a look at the data and familiarize yourself with the columns and what values are used to indicate the categories that each data point is in.
+```{r}
+view(spore_data)  
+```
+
+
+### Warmup: all the replicates as a single partial pooling model
+
+The dataset consists of replicate observations of spores. A model that allows each replicate to have a sporulation parameter that is normally distributed is: 
+$$
+spore\_count \sim Binomial(total, p) \\ 
+logit(p) \sim a[\mathrm{unique\_replicate\_id}]\\
+a[\mathrm{unique\_replicate\_id}] \sim Normal(a\_bar,sigma) \\
+a\_bar \sim Normal(0,2)\\
+sigma \sim Exponential(1)
+$$
+Code this model, calling it `m.spore.1` in Ulam and check the `precis` output.
+
+### A:
+
+```{r}
+m.spore.1 <- ulam(
+  alist(
+    spore_count ~ dbinom(total, p),
+    logit(p) <- a[unique_replicate_id],
+    a[unique_replicate_id] ~ dnorm(a_bar, sigma),
+    a_bar ~ dnorm(0, 2),
+    sigma ~ dexp(1)
+  ),
+  data = select(spore_data, spore_count, total, unique_replicate_id), chains = 4, log_lik = TRUE
+)
+```
+
+Checking the precis output:
+```{r}
+precis(m.spore.1, depth = 2)
+```
+
+This model appears to be working well, with the rhat being 1, it indicates that the chains have converged. However, the number of effective sample sizes for a_bar is less than the actual number of iterations, indicating that the chains are a bit inefficient, but still seem to work.
+
+
+### Effect of evolution treatment
+
+There are three treatments, with multiple observations of spores within each treatment. Expand on model `m.spore.1` by including an effect of treatment. You can do this by making the normal distribution for `a` values have a mean that depends on treatment index.  Something like:
+
+$$
+spore\_count \sim Binomial(total, p) \\ 
+logit(p) \sim a[\mathrm{unique\_replicate\_id}]\\
+a[\mathrm{unique\_replicate\_id}] \sim Normal(\mathrm{Your\ code\ here},sigma)
+$$
+
+
+Create the ulam model `m.spore.2` and examine the precis output.
+
+### A:
+
+```{r}
+m.spore.2 <- ulam(
+  alist(
+    spore_count ~ dbinom(total, p),
+    logit(p) <- a[unique_replicate_id],
+    a[unique_replicate_id] ~ dnorm(a_bar[treat_index], sigma),
+    a_bar[treat_index] ~ dnorm(0, 2),
+    sigma ~ dexp(1)
+  ),
+  data = select(spore_data, spore_count, total, unique_replicate_id, treat_index), chains = 4, log_lik = TRUE
+)
+```
+
+
+```{r}
+precis(m.spore.2, depth = 2)
+```
+
+The precis output for the model including the effect of treatment also has a good value for rhat, indicating convergence within versus between chains being equal. The number of effective parameters for each chain looks closer to the actual number of iterations than the model which didn't include treatment.
+
+
+Calculate the contrast for the effect of the three treatments and visualize the distribution. What effects do the treatments have on the proportion of cells that sporulate?
+
+```{r}
+post <- extract.samples(m.spore.2) %>% as_tibble() %>% 
+  select(a_bar)
+contrast <- mutate(post, delta_a12 = a_bar[,2]-a_bar[,1], delta_a13=a_bar[,3]-a_bar[,1], delta_a23=a_bar[,3]-a_bar[,2])
+mcmc_intervals(select(contrast, delta_a12, delta_a13, delta_a23))
+quantile(contrast$delta_a12,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_a13,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_a23,c(0.05, 0.5, 0.95))
+```
+
+From the contrasts, we can see that there is a negligible difference in spore counts between the ancestral treatment and the control; in addition, there is a large difference between the evolution treatment and ancestral, as well as a similar difference between evolution and the control. This tells us that there may be an interaction between evolution and fly presence, leading to a larger increase in spore counts. 
+
+### Additive effects of treatment and yeast strain
+In the experiments, we started with two different strains of yeast that had evolved out in nature for many generations. Create a model that allows for the effect of strain to be added to the effect of treatment.
+
+### A:
+
+```{r}
+m.strain <- ulam(
+  alist(
+    spore_count ~ dbinom(total, p),
+    logit(p) <- a[unique_replicate_id] + s[strain_index],
+    s[strain_index] ~ dnorm(0, 2),
+    a[unique_replicate_id] ~ dnorm(a_bar[treat_index], sigma),
+    a_bar[treat_index] ~ dnorm(0, 2),
+    sigma ~ dexp(1)
+  ),
+  data = select(spore_data, spore_count, total, unique_replicate_id, strain_index, treat_index), chains = 3, iter = 3000, log_lik = TRUE
+)
+```
+
+
+
+
+```{r}
+precis(m.strain, depth = 2)
+```
+
+
+Looking at the precis for the model, the rhat indicates not so goood convergence between chains, although 
+
+Now compute contrasts both for treatment and strain effects. Did the treatment effects change at all? What do the results tell you about the two yeast strains?
+
+```{r}
+post <- extract.samples(m.strain) %>% as_tibble() %>% 
+  select(a_bar, s)
+contrast <- mutate(post, delta_a12 = a_bar[,2]-a_bar[,1], delta_a13=a_bar[,3]-a_bar[,1], delta_a23=a_bar[,3]-a_bar[,2], delta_s=s[,2]-s[,1])
+mcmc_intervals(select(contrast, delta_a12, delta_a13, delta_a23, delta_s))
+quantile(contrast$delta_a12,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_a13,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_a23,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_s, c(0.05, 0.5, 0.95))
+```
+
+With the second model including the additive effect of the strain of yeast, it appears to have slightly reduced the effect of the evolution treatment on spore count, and the difference between the control and ancestral treatment is slightly larger. However, there is still a large difference between the evolution treatment and both the ancestral and control treatment. Looking at the effect of strain, it appears that the WE strain overall has less spore counts than the AM strain. 
+
+
+### Interaction model
+Here we will create a model that includes unique mean sporulation probabilities for each strainXtreatment combination. One straightforward way to do this is to first create a new column that has a unique value for each of the 6 possible strain/treatment combinations. Then use this new column index in your multilevel model.
+
+Run the model and examine the precis output.
+
+```{r}
+spore_data$strain_treat_index <- as.integer(interaction(spore_data$strain_index, spore_data$treat_index))
+```
+
+```{r}
+m.interaction <- ulam(
+  alist(
+    spore_count ~ dbinom(total, p),
+    logit(p) <- a[unique_replicate_id],
+    a[unique_replicate_id] ~ dnorm(a_bar[strain_treat_index], sigma),
+    a_bar[strain_treat_index] ~ dnorm(0, 2),
+    sigma ~ dexp(1)
+  ),
+  data = select(spore_data, spore_count, total, unique_replicate_id, strain_treat_index), chains = 4, log_lik = TRUE
+)
+```
+
+```{r}
+precis(m.interaction, depth = 2)
+```
+
+Calculate the contrasts for the effect of the experiment within each yeast strain. We want to know if the ancestral and control differ, if the ancestral and treatment differ, and if the control and treatment differ.
+
+Contrasts within and between strains:
+
+```{r}
+post <- extract.samples(m.interaction) %>% as_tibble() %>% 
+  select(a_bar)
+contrast <- mutate(post, WE_delta24 = a_bar[,4]-a_bar[,2], WE_delta26=a_bar[,6]-a_bar[,2], WE_delta46=a_bar[,6]-a_bar[,4], AM_delta13 = a_bar[,3]-a_bar[,1], AM_delta15=a_bar[,5]-a_bar[,1], AM_delta35=a_bar[,5]-a_bar[,3] )
+mcmc_intervals(select(contrast, WE_delta24, WE_delta26, WE_delta46, AM_delta13, AM_delta15, AM_delta35))
+```
+
+From these contrasts, we can see that within each strain, allowing for evolution with flies serves to increase the spore count, whereas evolution without flies does not greatly differ from the ancestral treatment. In addition, the AM strain appears to produce higher spore counts when allowing for evolution, given that there are flies, when compared to the WE strain. 
+Also, we can see that when allowing for evolution with the AM strain, there seems to be a large interactive effect between evolution and presence of flies, because the difference between the treatment group and the ancestral group is very similar to the difference between the treatment group and the control group; and there appears to be only a small, if any difference between the control and ancestral group. We can also see this by looking at WE, which appears to produce more spores when allowed to evolve, regardless of wether there are flies or not. 
+
+
+```{r}
+spore_data_int <- mutate(spore_data, comb_index = strain_index*10+treat_index)%>% 
+  mutate(comb_index=as.numeric(as.factor(comb_index)))
+```
+
+
+
+
+### bonus question: Did the strains evolve differently?
+We now have contrasts that estimate how each strain changed between the ancestral and treatment populations, measured on the logit scale. Did the two strains evolve in different ways (the measure of evolution is the difference between the ancestral and treatment populations). Determine if there is a difference between the change (on the logit scale) between the ancestor and the treatment populations. 
+
+```{r}
+contrast2 <- mutate(contrast, strain_delta = AM_delta15 - WE_delta26)
+mcmc_intervals(select(contrast2, strain_delta))
+```
+
+From this contrast, we can see that the difference distribution between the AM change and WE change does not fall on zero. This tells us that the two strains likely evolved differently, with the AM strain evolving to produce more spore counts than the WE strain.
+
+
+How can you relate this to the probability scale? Feel free to take any conceptual short cut you want to try here.
+
+This can be related to the probability scale by looking at it as a distribution; while its possible for the difference between the two strains to fall anywhere on the mcmc interval, most of the probability in the distribution falls between the change values of 1.5 to ~1.9, indicating it is less likely for there to be a smaller or larger change than that, but also that it is virtually impossible for the two strains to have equal evolutionary changes. 
+
+

@@ -1,0 +1,442 @@
+---
+title: "FinalExam174_2023"
+author: "Stephen R. Proulx"
+date: "2023-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(tidyverse)
+library(rethinking)
+source("../helper.R")
+
+``` 
+
+
+
+
+
+## Short Awnswer
+
+### Question 1 (5 pts)
+
+Consider this dataset where $y$ is the number of eggs laid by individual fruit flies who are put into vials with $x$ microliters of yeast paste. 
+```{r}
+data <- tibble( y = c(35,43,54,33,65,54,72,55,66), x = c(5,5,5,10,10,10,15,15,15))
+```
+
+What's wrong with this model specified here? Re-write the `ulam` model. 
+```{r}
+model <- ulam(alist(
+  y ~ dbinom(total, mu),
+  mu <- a + b * x,
+  a ~ dnorm(0,3),
+  b ~ dnorm(0,1)
+) ,  data=data)
+```
+
+
+### Question 2 (10 pts)
+ The dataframe has a column $y$ that are body length measurements for a species of lizard. Column $x_1$ is 0 for male lizards and 1 for female lizards. Column $x_2$ is 0 for brown throated lizards and 1 for green throated lizards. We add another 4 columns that are indicator variables for each of the 4 states that a lizard can be in (male/female X brown/green), defining $x_{i,j}=1$ if $x_1=i$ and $x_2=j$. 
+ 
+Below are three model definitions (partial definitions, I have not written out the priors).
+
+Model 1
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu = a + b_1 x_1 + b_2 x_2
+ 
+$$
+Model 2
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu = a + b_1 x_1 + b_2 x_2 + b_{12} x_1 x_2
+ 
+$$
+Model 3
+$$
+ y \sim \mathrm{normal}(\mu,\sigma) \\
+ \mu =  b_{0,0} x_{0,0} + b_{0,1} x_{0,1} + b_{1,0} x_{1,0} + b_{1,1} x_{1,1}
+$$
+(A) Which of these models can be considered models with interaction? Explain why.
+
+<!-- 2 -->
+
+(B) Consider these values for the means of categories below: 
+
+sex   color    mean length    
+----- -------  --------------
+M      B         13
+M      G         15
+F      B         16
+F      G         20
+
+Can you choose values of the parameters (i.e. just pick them by hand, no need to fit a model) for each of the three models that would have the mean, $\mu$, be equal to these mean values in each category? 
+
+
+### Question 3 (10 pts)
+Consider this dataset:
+```{r}
+data <- tibble( x=seq(1,10),y=c(4.4,6.0,4.2,6.9,5.4,3.3,1.1,2.7,1.3,5.5))
+
+ggplot(data,aes(x=x,y=y))+ 
+  geom_point()+
+  ylim(0,10)
+```
+
+Here are two potential models to fit these data:
+```{r}
+m.1 <- ulam(alist(
+  y ~ dnorm(mu, sigma),
+  mu <- a + b1*x,
+  a ~ dnorm(5,2.5),
+  b1 ~ dnorm(0,1),
+  sigma ~ dexp(1)
+), data = data)
+```
+
+```{r}
+m.2 <- ulam(alist(
+  y ~ dnorm(mu, sigma),
+  mu <- a + b1*x + b2*x^2 + b3*x^3,
+  a ~ dnorm(5,2.5),
+  b1 ~ dnorm(0,1),
+  b2 ~ dnorm(0,1),
+  b3 ~ dnorm(0,1),
+  sigma ~ dexp(1)
+), data = data)
+```
+
+(A) After fitting the models you can compute the probability of observing the data given the parameters. Which model do you expect to fit the data best, and why?
+
+```{r}
+precis(m.1)
+precis(m.2)
+```
+
+
+
+
+(B) Now consider this additional point is discovered and added to the dataset. Which model do you expect will fit this dataset better and why?
+```{r}
+data <- tibble( x=seq(1,10),y=c(4.4,6.0,4.2,6.9,5.4,3.3,1.1,2.7,1.3,5.5))
+new_data <- tibble( x=c(7), y= c(5.0) )
+
+ggplot(data,aes(x=x,y=y))+ 
+  geom_point()+
+  geom_point(data=new_data,color="red")+
+  ylim(0,10)
+```
+
+
+
+## Analysis Challenge
+
+
+The paper on bacterial coevolution discusses prey bacteria that have been experimentally evolved in the presence of a predator. These evolved bacteria were then assayed for their fitness, and this was done in 4 environments. In the "no predator" environment the bacteria are allowed to grow without a predator. In the "coevolved predator" treatment they are being consumed by the predator strain that was present at the end of the coevolution experiment. In the "ancestral predator" treatment they are being consumed by the ancestral predator that has not undergone coevolution. In the "control predator" treatment a predator that was evolved in the absence of prey is included. 
+
+We would like to ask whether or not the evolved prey bacteria respond differently to the 4 treatments. 
+
+In the experimental design, there were 12 seperate evolved populations, and each population was assayed 3 times. The 12 evolved populations come from 3 different subclones (4 populations from each) and are either antibiotic resistant (resistance=="r") or not.
+
+
+First we load the data:
+```{r}
+
+data<-read.csv("PreyCompetitionResults.csv")%>%
+  as_tibble()%>%
+  mutate(treatment_code=(treatment=="coevolved predator")*1 +(treatment=="control predator")*2+(treatment=="ancestral predator")*3+(treatment=="no predator")*4,
+         resistant_code=(resistance=="r")*1+(resistance=="s")*2,log_rel_fitness=log(rel_fitness))%>%
+  mutate(obs_id =(population*100+treatment_code))%>%
+  mutate(observation=as.numeric(as.factor(obs_id))) %>%view()
+
+```
+
+Note that I created a column called "observation" which uniquely identifies each population by treatment. i.e. population 1 with the coevolved predator is coded as observation group 1, and has three replicate observations.  
+
+
+And we can start by visualizing the data, showing the growth rates for all 12 populations. You can see considerable variability in the growth rates among assays and between populations. 
+```{r}
+ggplot(data,aes(x=population,y=log_rel_fitness,color=as.factor(subclone))) +
+  geom_point()+
+  facet_wrap(~treatment)
+```
+
+
+
+### Q4  create a complete pooling model for all the observations with no predictive factors. (10 pts)
+The dataset has 143 observations, this comes from 12 populations assayed in 4 environments and replicated 3 times ($12*4*3=144$, with one observation missing). Here is a way to specify the model:
+$$
+\mathrm{log\ fitness} \sim \mathrm{Normal}(\mu,\sigma) \\
+\mu \sim \mathrm{Normal}(0,2) \\
+\sigma \sim \mathrm{Exponential}(1)
+$$
+
+(A) Explain why this specification for the likelihood and for the priors is appropriate. What makes this a complete pooling model?
+
+Because we are working on the log scale, we need our sigma to be only positive. This is why its exponential. The likelihood specification is accurate because the fitness is estimated to center around a mean mu and standard deviation sigma for the entire experimental population. This is a complete pooling model because it does not distinguish different means across groups or categories. It estimates one mean log fitness for E. coli regardless of grouping factors.
+
+
+
+
+(B) Specify the model using `ulam` and report the output. Explain any procedures you follow to make sure that the MCMC sampling proceeded as expected.
+
+
+
+
+```{r}
+m1 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+    mu ~ dnorm(0, 2),
+    sigma ~ dexp(1)
+  ), data = select(data, log_rel_fitness), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
+```{r}
+precis(m1, depth = 2) 
+```
+
+
+
+
+### Q5 make no-pooling model at the level of evolved populations (10 pts)
+To do this we have to group the replicate assays of each evolved population in each predator environment. I have already created the column "observation" for this. 
+
+(A) Write out the no-pooling model where we assign a mean log growth rate for each observation group.
+$$
+\mathrm{log\ fitness} \sim \mathrm{Normal}(\mu,\sigma) \\
+\mathrm{\mu = a[observation]} \\ 
+\mathrm{a[observation] \sim Normal(0, 2)} \\ 
+\mathrm{\sigma \sim Exponential(1)}
+$$
+
+
+(B) Specify the model using `ulam` and report the output. Explain any procedures you follow to make sure that the MCMC sampling proceeded as expected.
+
+
+$$
+\mathrm{log\ fitness} \sim \mathrm{Normal}(\mu,\sigma) \\
+\mu = a[\mathrm{Population}] + abar[\mathrm{Treatment}] \\
+a{\mathrm{[Population]}} \sim \mathrm{Normal(0,2)} \\
+abar[\mathrm{Treatment}] \sim \mathrm{Normal(0,2)} \\
+\sigma \sim \mathrm{Exponential(1)} \\
+$$
+
+```{r}
+m2 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+    mu <- abar + a[observation],
+    a[observation] ~ dnorm(0, 2),
+    abar ~ dnorm(0, 1)
+    sigma ~ dexp(1)
+), data = select(data, log_rel_fitness, observation), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
+```{r}
+precis(m2, depth = 2)
+```
+
+
+
+
+### Q6 make partial pooling model at the level of evolved populations (10 pts)
+
+(A) Write out the partial-pooling model where we assign a mean log growth rate for each observation group, but that observation group value has a prior that includes a standard deviation parameter. 
+$$
+\mathrm{log\ fitness} \sim \mathrm{Normal}(\mu,\sigma) \\
+\mathrm{\mu = a[observation]} \\ 
+\mathrm{a[observation] \sim Normal(abar, \sigma_{\gamma})} \\ 
+\mathrm{abar \sim Normal(0, 2)} \\ 
+\mathrm{\sigma \sim Exponential(1)} \\
+\mathrm{\sigma_{\gamma} \sim Exponential(1)}
+$$
+
+(B) Specify the model using `ulam` and report the output. Explain any procedures you follow to make sure that the MCMC sampling proceeded as expected.
+
+
+```{r}
+m3 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+    mu <- a[observation],
+    a[observation] ~ dnorm(abar, sigmaone),
+    abar ~ dnorm(0, 2),
+    sigmaone ~ dexp(1),
+    sigma ~ dexp(1)
+), data = select(data, log_rel_fitness, observation), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
+
+```{r}
+precis(m3, depth = 2)
+```
+
+
+
+
+
+
+### Q7 make partial pooling model with predator treatment as factor. (20 pts)
+
+
+(A) Write out a model where the effect of observation group is a partial-pooling model (i.e. a random effect) and where there is an effect of predator treatment. Predator treatment has 4 levels. 
+$$
+\mathrm{log\ fitness} \sim \mathrm{Normal}(\mu,\sigma) \\
+\mathrm{\mu = abar + a[observation]*sigmaone + bp*treatment\text{_}code } \\ 
+\mathrm{a[observation] \sim Normal(0, 1)} \\ 
+\mathrm{bp \sim Normal (-0.5, 1.5)} \\
+\mathrm{abar \sim Normal(0, 2)} \\ 
+\mathrm{\sigma \sim Exponential(1)} \\
+\mathrm{\sigma_{\gamma} \sim Exponential(1)}
+$$
+
+(B) Specify the model using `ulam` and report the precis output. 
+
+```{r}
+data_list <- list(
+  log_rel_fitness = data$log_rel_fitness,
+  observation = as.integer(data$observation),
+  treatment_code = as.integer(data$treatment_code)
+)
+m4.1 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+     mu <- abar + a[observation]*sigmaone + b_1*(treatment_code == 1) + b_2*(treatment_code == 2) + b_3*(treatment_code == 3) + b_4*(treatment_code == 4),
+    a[observation] ~ dnorm(0, 1.5),
+    b_1 ~ dnorm(0, 1.5),
+    b_2 ~ dnorm(0, 1.5),
+    b_3 ~ dnorm(0, 1.5),
+    b_4 ~ dnorm(0, 1.5),
+    abar ~ dnorm(0, 2),
+    sigmaone ~ dexp(1),
+    sigma ~ dexp(1)
+), data = select(data, log_rel_fitness, observation, treatment_code), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+m4.4 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+     mu <- abar + a[observation]*sigmaone + b_1*(treatment_code == 1) + b_2*(treatment_code == 2) + b_3*(treatment_code == 3) + b_4*(treatment_code == 4),
+    a[observation] ~ dnorm(0, 1.5),
+    b_1 ~ dnorm(0, 1.5),
+    b_2 ~ dnorm(0, 1.5),
+    b_3 ~ dnorm(0, 1.5),
+    b_4 ~ dnorm(0, 1.5),
+    abar ~ dnorm(0, 2),
+    sigmaone ~ dexp(1),
+    sigma ~ dexp(1)
+), data = select(data, log_rel_fitness, observation, treatment_code), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+m4.5 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+    mu <- abar + a[observation]*sigmao + b[treatment_code],
+    a[observation] ~ dnorm(0, 1),
+    abar ~ dnorm(0, 2),
+    sigmao ~ dexp(1),
+    sigma ~ dexp(1),
+    b[treatment_code] ~ dnorm(0, 2)
+  ), data = select(data, log_rel_fitness, observation, treatment_code), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
+```{r}
+# precis(m4, depth = 2)
+# precis(m4.1, depth = 2)
+# precis(m4.2, depth = 2)
+# precis(m4.3, depth = 2)
+precis(m4.4, depth = 2)
+precis(m4.5, depth = 2)
+```
+
+
+(C) Compute contrasts for the treatment effects. Because there are 4 treatment types, there are 6 contrasts (1-2, 1-3, 1-4, 2-3, 2-4, 3-4).  
+
+```{r}
+post <- extract.samples(m4.1) %>% as_tibble() %>% 
+  select(abar, b_1, b_2, b_3, b_4)
+contrast <- mutate(post, 
+                   delta_b12 = b_2[,1]-b_1[,1], 
+                   delta_b13=b_3[,1]-b_1[,1], 
+                   delta_b14=b_4[,1]-b_1[,1], 
+                   delta_b23 = b_3[,1]-b_2[,1], 
+                   delta_b24=b_4[,1]-b_2[,1], 
+                   delta_b34=b_4[,1]-b_3[,1])
+
+mcmc_intervals(select(contrast, delta_b12, delta_b13, delta_b14,delta_b23 ,delta_b24 , delta_b34))
+quantile(contrast$delta_b12,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_b13,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_b14,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_b23,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_b24,c(0.05, 0.5, 0.95))
+quantile(contrast$delta_b34,c(0.05, 0.5, 0.95))
+```
+
+
+
+
+(D) Compare the four models using `compare`. Explain what you conclude based on the WAIC scores. Interpret the pWAIC values. 
+
+```{r}
+compare(m1, m2, m3, m4.1, func = WAIC)
+```
+
+
+
+(E) Based on the WAIC scores and the contrasts that you calculated for the treatment effects, would you conclude that the prey bacteria evolved a a higher relative growth rate in when exposed to predators? Explain how the information you get from the contrasts is different from the information you get when comparing WAIC scores.
+
+
+
+### Q8 Add in additional co-factors (5 pts)
+The populations are also defined by which subclone they were derived from and whether or not they are antibiotic resistant.
+
+(A) Write out a model that includes subclone identity and resistance.
+
+$$
+\mathrm{log~fitness \sim Normal(\mu, \sigma) } \\
+\mathrm{\mu = abar + at[treatment\text{_}code] + a[observation]*sigmao + as[subclone] + (resistance == 2)*ar - (resistance == 1)*ar} \\ 
+\mathrm{a[observation] \sim Normal (0, 2)} \\
+\mathrm{abar \sim Normal(0, 2)} \\
+\mathrm{sigmao \sim Exponential(1)} \\
+\mathrm{as[sublcone] \sim Normal(0, 1)} \\
+\mathrm{at[treatment\text{_}code] \sim Normal(0, 1)} \\
+\mathrm{ar \sim Normal(0, 1)} \\
+$$
+
+
+(B) Use `ulam` to run this model and report the `precis`
+
+```{r}
+m5 <- ulam(
+  alist(
+    log_rel_fitness ~ dnorm(mu, sigma),
+    mu <- abar + at[treatment_code] + a[observation]*sigmao + as[subclone] + (resistant_code == 2 )*ar - (resistant_code == 1)*ar,
+    a[observation] ~ dnorm(0, 2),
+    as[subclone] ~ dnorm(0, 1),
+    at[treatment_code] ~ dnorm(0, 1),
+    ar ~ dnorm(0, 2),
+    abar ~ dnorm(0, 2),
+    sigmao ~ dexp(1),
+    sigma ~ dexp(1)
+  ), data = select(data, log_rel_fitness, treatment_code, observation, subclone, resistant_code), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+precis(m5, depth = 2)
+```
+
+
+
+
+(C) Compute the contrasts for treatment using the posterior samples for this model
+
+
+
+
+(D) What are the advantages of using this model with co-factors over the previous model?
+
+
+
+
+
+

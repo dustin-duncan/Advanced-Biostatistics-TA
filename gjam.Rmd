@@ -1,0 +1,60 @@
+---
+title: "gjam"
+author: "Dustin Duncan"
+date: "2024-04-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# install.packages("gjam")
+library(gjam)
+f <- gjamSimData(n = 500, S = 10, Q = 4, typeNames = 'CA')
+summary(f)
+f$trueValues
+f$formula
+xdata <- f$xdata
+mean(xdata$x2)
+mean(xdata$x3)
+mean(xdata$x4)
+betaStn <- f$trueValues$betaStn
+ydata <- f$ydata
+```
+
+```{r}
+library(repmis)
+d <- "https://github.com/jimclarkatduke/gjam/blob/master/forestTraits.RData?raw=True"
+source_data(d)
+xdata <- forestTraits$xdata[,c(1,2,7,8)]
+formula <- as.formula( ~ temp + deficit + soil )
+y  <- gjamReZero(forestTraits$treesDeZero)  # extract y
+treeYdata  <- gjamTrimY(y,10)$y             # at least 10 plots
+dim(treeYdata)
+treeYdata[1:5,1:6]
+ml   <- list( ng = 2500, burnin = 500, typeNames = 'DA', 
+              reductList = list(r = 8, N = 20) )
+form <- as.formula( ~ temp*deficit + I(temp^2) + I(deficit^2) )
+out  <- gjam(form, xdata = xdata, ydata = treeYdata, modelList = ml)
+```
+
+```{r}
+library(tidyverse)
+?grep
+beta <- out$parameters$betaTable
+ws <- grep('status_', rownames(beta))  # find coefficients for status
+beta[ws,]
+out$fit$rmspeBySpec[1:10]
+gjamPlot(output = out, plotPars = list(PLOTALLY = T))
+out$prediction$yPresentSe
+out$chains$fSensGibbs
+```
+
+```{r}
+out$parameters$betaSe
+sig <- beta %>% 
+  filter(sig95 == "*")
+```
+

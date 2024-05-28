@@ -1,12 +1,13 @@
 ---
-title: "Lab 8"
-author: "Stephen R. Proulx"
-output: pdf_document
+title: "Lab 8 Completed"
+author: "Dustin Duncan"
+date: "2024-03-07"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+rm(list = ls())
 library(tidyverse)
 library(rethinking)
 library(bayesplot)
@@ -30,134 +31,52 @@ You will create 5 versions of the model:
 
 m1: A model with no factors predicting survivorship, but one that assumes that all tanks have their survivorship drawn at random from a normal distribution where the mean and standard deviation of that normal are parameters. This is model 13.2 from the book. 
 $$
-\mathrm{logit}(p) = \bar{a} + \delta a_i *\sigma \\ 
-\mathrm{logit(p) = abar + a[tank]*sigma} \\
-\mathrm{a[tank] \sim Normal(?, ?)} \\
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\
-
-== \\
-\mathrm{logit(p) = a[tank]} \\ 
-\mathrm{a[tank] \sim Normal(abar, sigma)} \\ 
-\mathrm{abar \sim Normal(?, ?)} \\ 
-\mathrm{sigma \sim Exponential(1)}
+\mathrm{logit}(p) = \bar{a} + \delta a_i *\sigma
 $$
 
-```{r}
 
-```
 
 
 m2: A model with a random tank effect, as in m1, but also with a direct effect of  predation.
 
 $$
-\mathrm{logit}(p) = \bar{a} + b_P*P_i + \delta a_i *\sigma \\ 
-\mathrm{logit(p) = abar + b_{p}*Predindex + a[tank]*sigma} \\ 
-\mathrm{a[tank] \sim Normal(?, ?)} \\ 
-\mathrm{b_p \sim Normal(?, ?)} \\
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\ 
-
-== \\ 
-
-\mathrm{logit(p) = a[tank]} \\ 
-\mathrm{a[tank] \sim Normal(abar[predindex], sigma)} \\ 
-\mathrm{abar[predindex] \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\ 
-
+\mathrm{logit}(p) = \bar{a} + b_P*P_i + \delta a_i *\sigma
 $$
 
-```{r}
 
-```
 
 
 m3: A model with a random tank effect, as in m1, but also with an effect of tadpole size.
 
 $$
-\mathrm{logit}(p) = \bar{a} + b_s*ts_i + \delta a_i *\sigma \\ 
-\mathrm{logit(p) = abar + b_{s}*sizeindex + a[tank]*sigma} \\ 
-\mathrm{a[tank] \sim Normal(?, ?)} \\ 
-\mathrm{b_s \sim Normal(?, ?)} \\
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\ 
-
-== \\ 
-
-\mathrm{logit(p) = a[tank]} \\ 
-\mathrm{a[tank] \sim Normal(abar[sizeindex], sigma)} \\ 
-\mathrm{abar[sizeindex] \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\
+\mathrm{logit}(p) = \bar{a} + b_s*ts_i + \delta a_i *\sigma
 $$
 
-```{r}
 
-```
 
 
 
 m4: A model with a random tank effect, and with independent (i.e. additive on the logit scale) effects of predation and tadpole size.
 
 $$
-\mathrm{logit}(p) = \bar{a} + b_P*P_i + b_s*ts_i +  \delta a_i *\sigma \\ 
-\mathrm{logit(p) = abar + b_{p}*predindex + b_{s}*sizeindex + a[tank]*sigma} \\ 
-\mathrm{a[tank] \sim Normal(?, ?)} \\ 
-\mathrm{b_s \sim Normal(?, ?)} \\
-\mathrm{b_p \sim Normal(?, ?)} \\
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\ 
-
-== \\ 
-
-\mathrm{logit(p) = a[tank] + p[predinex] + s[sizeindex]} \\ 
-\mathrm{a[tank] \sim Normal(abar, sigma)} \\ 
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{p[predindex] \sim Normal(bbar, 1.5)} \\
-\mathrm{bbar \sim Normal(?, ?)} \\
-\mathrm{s[sizeindex] \sim Normal(cbar, 1)} \\
-\mathrm{cbar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\
+\mathrm{logit}(p) = \bar{a} + b_P*P_i + b_s*ts_i +  \delta a_i *\sigma
 $$
 
-```{r}
 
-```
 
 
 
 m5: A model with a random tank effect, and interacting effects of predation and tadpole size. Because both predation and tadpole size have two levels, there are 4 total parameters to describe these effects. 
 
 $$
-\mathrm{logit}(p) = \bar{a} + b_P*P_i + b_s*ts_i + b_Pts *P_i *ts_i +  \delta a_i *\sigma \\ 
-\mathrm{logit(p) = abar + b_{p}*predindex + b_{s}*sizeindex + b_{ps}*predindex*sizeindex + a[tank]*sigma} \\ 
-\mathrm{a[tank] \sim Normal(?, ?)} \\ 
-\mathrm{b_s \sim Normal(?, ?)} \\
-\mathrm{b_p \sim Normal(?, ?)} \\
-\mathrm{b_{ps} \sim Normal(?, ?)} \\
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\ 
-
-== \\ 
-
-\mathrm{logit(p) = a[tank] + p[predinex] + s[sizeindex] + ps[predindex][sizeindex]} \\ 
-\mathrm{a[tank] \sim Normal(abar, sigma)} \\ 
-\mathrm{abar \sim Normal(?, ?)} \\
-\mathrm{p[predindex] \sim Normal(bbar, 1.5)} \\
-\mathrm{bbar \sim Normal(?, ?)} \\
-\mathrm{s[sizeindex] \sim Normal(cbar, 1)} \\
-\mathrm{cbar \sim Normal(?, ?)} \\
-\mathrm{ps[predindex][sizeindex] \sim Normal(dbar, sigma)} \\
-\mathrm{dbar \sim Normal(?, ?)} \\
-\mathrm{sigma \sim Exponential(1)} \\
+\mathrm{logit}(p) = \bar{a} + b_P*P_i + b_s*ts_i + b_Pts *P_i *ts_i +  \delta a_i *\sigma
 $$
 
-```{r}
 
-```
 
 
 Here's the data- you will need to add some columns to correctly format the predictors for your model. 
-```{r}
+```{r , eval=TRUE}
 library(rethinking) 
 data(reedfrogs)
 
@@ -171,22 +90,82 @@ P = ifelse( d$pred=="no" , 0L , 1L ),
 ts = ifelse( d$size=="small" , 0L , 1L ),
 dtreat = ifelse( d$density=="10" , 1L , ifelse( d$density=="25"  , 2L ,3L) )
 ) 
-dat$P <- dat$P + 1
-dat$ts <- dat$ts + 1
+dat2 <- as_tibble(reedfrogs) %>%
+  rowid_to_column("tank") %>%
+  mutate(P = (pred == "no")*1 + (pred == "pred")*2,
+         ts = (size == "small")*1 + (size == "big")*2) %>% 
+  rename(size_ = size)
 ```
 
 
 
 ## Build and sample model 1
 Run m1 with 4 chains for 3000 iterations. Get the precis output, check for convergence, and note the range of high posterior probability parameter values.
+```{r}
+m1 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- a[tank],
+    a[tank] ~ dnorm(abar, sigma),
+    abar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = dat2, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
+
+```{r}
+precis(m1, depth = 2)
+rethinking::coef(m1)
+
+```
 
 Use sim_df to simulate the tank specific data and plot it with the original data. 
 
 
 ## Build and sample model 2
 Run m2 with 4 chains for 3000 iterations. Get the precis output, check for convergence, and note the range of high posterior probability parameter values.
+```{r}
+m2 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- abar + a[tank]*sigma + bp*pred,
+    a[tank] ~ dnorm(0, 1),
+    bp ~ dnorm(-0.5, 1),
+    abar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = dat2, chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+
+m2.2 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- a[tank],
+    a[tank] ~ dnorm(a_bar[pred], sigma),
+    a_bar[pred] ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+    ), data = select(dat2, density, pred, tank, surv), chains = 4, iter = 3000, log_lik = TRUE
+)
+m2.2 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- a[tank],
+    a[tank] ~ dnorm(a_bar[pred], sigma),
+    a_bar[pred] ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+    ), data = select(dat2, density, pred, tank, surv), chains = 4, iter = 3000, log_lik = TRUE
+)
+```
+```{r}
+precis(m2, depth = 2)
+precis(m2.2, depth = 2)
+```
 
 Compare m1 and m2 using WAIC. 
+
+```{r}
+compare(m1,m2, m2.2)
+```
+
 
 Compare the values of sigma for m1 and m2. 
 
@@ -196,19 +175,65 @@ Use sim_df to simulate the tank specific data and plot it with the original data
 
 ## Build and sample model 3
 Run m3 with 4 chains for 3000 iterations. Get the precis output, check for convergence, and note the range of high posterior probability parameter values.
-
+```{r}
+m3 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- abar + a[tank]*sigma + bs*size_,
+    a[tank] ~ dnorm(0, 1),
+    bs ~ dnorm(0, 0.5),
+    abar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = select(dat2, surv, density, size_, tank), chains = 4, cores = 4, log_lik = TRUE
+)
+m3.2 <- ulam(
+  alist(
+    surv ~ dbinom(density, p),
+    logit(p) <- a[tank],
+    a[tank] ~ dnorm(abar[size_], sigma),
+    abar[size_] ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = select(dat2, surv, tank, size_, density), chains = 4, cores = 4, log_lik = TRUE
+)
+```
 Compare m1 and m3 using WAIC. 
+```{r}
+precis(m3, depth = 2)
+precis(m3.2, depth = 2)
+```
+
 
 Compare the values of sigma for m1 and m3. 
+```{r}
+compare(m1, m2.2, m3.2)
+```
+
 
 Use sim_df to simulate the tank specific data and plot it with the original data. 
 
 
 ## Build and sample model 4
 Run m4 with 4 chains for 3000 iterations. Get the precis output, check for convergence, and note the range of high posterior probability parameter values.
-
+```{r}
+m4 <- ulam(
+  alist(
+    S ~ dbinom(n, p),
+    logit(p) <- abar + a[tank]*sigma + bp*P + bs*ts,
+    a[tank] ~ dnorm(0, 2),
+    bp ~ dnorm(-0.5, 1),
+    bs ~ dnorm(0, 0.5),
+    abar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = dat, chains = 4, cores = 4, log_lik = TRUE
+)
+```
 Compare models m2 and m3 with m4 using WAIC. 
+```{r}
+precis(m4, depth = 2)
+# precis(m4.2, depth =2)
+```
 
+precis(m4)
 Compare the values of sigma for m2, m3, and m4.
 
 Use sim_df to simulate the tank specific data and plot it with the original data. 
@@ -216,8 +241,24 @@ Use sim_df to simulate the tank specific data and plot it with the original data
 
 ## Build and sample model 5
 Run m4 with 5 chains for 3000 iterations. Get the precis output, check for convergence, and note the range of high posterior probability parameter values.
-
+```{r}
+m5 <- ulam(
+  alist(
+    surv ~ dbinom(density, p), 
+    logit(p) <- abar + bp*pred + bs*size_ + bpts*size_*pred + a[tank]*sigma,
+    a[tank] ~ dnorm(0, 1),
+    bpts ~ dnorm(0, 2),
+    bs ~ dnorm(0, 0.5),
+    bp ~ dnorm(-0.5, 1),
+    abar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)
+  ), data = select(dat2, tank, pred, size_, density, surv), chains = 4, cores = 4, iter = 3000, log_lik = TRUE
+)
+```
 Compare models m4 with m5 using WAIC. 
+```{r}
+precis(m5, depth = 2)
+```
 
 Compare the values of sigma for m4 and m5.
 
@@ -226,13 +267,19 @@ Use sim_df to simulate the tank specific data and plot it with the original data
 ## Compare the coefficients from all the models
 We can extract all of the mean coefficients from all 5 models and look at them in a single table using `coeftab`. It is in alphabetical order, so abar and sigma are somewhere in the middle. Note that it inclused the tank specific `a` values, as well as the `p` values for each row in our data. 
 
-
 ```{r , eval=FALSE}
-coeftab( m1.1 , m1.2 , m1.3 , m1.4 , m1.5 )
+coeftab <- coeftab( m1 , m2 , m3 , m4 , m5 )
+
+coeftab1 <- tibble(a_tank = rep(1:53), coefficient = coeftab@coefs[1:53, ]) 
+
+coeftab1$pval_m1 = inv_logit(coeftab1$coefficient[1:53, 1])
+coeftab1$pval_m2 = inv_logit(coeftab1$coefficient[1:53, 2])
+coeftab1$pval_m3 = inv_logit(coeftab1$coefficient[1:53, 3])
+coeftab1$pval_m4 = inv_logit(coeftab1$coefficient[1:53, 4])
+coeftab1$pval_m5 = inv_logit(coeftab1$coefficient[1:53, 5])
 ```
 
 Thought questions: 
 1. Scan the values for `a[tank]` across models and the values for `p[tank]`. What do you notice about how they vary among models. Why do you think this is?
 2. How do the values of `sigma` compare across models?
 3. How does the value of `bs` change among models? Why do you think this is?
-

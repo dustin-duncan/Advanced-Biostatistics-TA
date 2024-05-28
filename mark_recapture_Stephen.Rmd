@@ -1,0 +1,259 @@
+---
+title: "Mark Recapture in R"
+author: "Dustin Duncan"
+date: "2024-02-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Mark recapture
+Starting from the manual:
+https://mc-stan.org/docs/2_18/stan-users-guide/mark-recapture-models.html
+
+This is a very simple model where we just want to know how big the population is. Data are the number (M)arked, the number re(C)aptured and the number ma(R)ked in the recaptured population.
+
+It is just a binomial model turned on its side because we are estimating the N from which it is drawn.
+
+```{r}
+scode<-"data {
+  int<lower=0> M;
+  int<lower=0> C;
+  int<lower=0,upper=min(M,C)> R;
+}
+parameters {
+  real<lower=(C - R + M)> N;
+}
+model {
+  R ~ binomial(C, M / N);
+}"
+
+
+stanfile<- cmdstanr::write_stan_file(scode)
+
+
+#Compile the stan program
+ 
+mod_markcapture <- cmdstanr::cmdstan_model(stanfile)
+```
+
+```{r}
+
+stan_data=list(M=100,C=100,R=50)
+
+
+results <- mod_markcapture$sample(
+  data = stan_data,
+  chains = 4,
+  parallel_chains = 8,
+  iter_warmup = 1000,
+  iter_sampling = 1000
+)
+
+results$summary()
+```
+
+### more complex version from Bayesian Population Analysis
+
+https://github.com/stan-dev/example-models/blob/master/BPA/Ch.07/7.5.3_Individual_random_effects.R
+and here
+https://www.vogelwarte.ch/modx/de/projekte/publikationen/bpa/complete-code-and-data-files-of-the-book
+
+
+compile stan program
+```{r}
+mod_markreff <- cmdstanr::cmdstan_model(stan_file="cjs_ind_raneff.stan")
+
+```
+
+simulation from the package with some additions by me.
+We define a size of individuals which can affect survival, but not recapture probability
+```{r}
+
+logit<-Vectorize(function(x) log(x/(1-x)))
+inv_logit <- Vectorize(function(y) 1/(1+exp(-y)))
+
+
+# Define parameter values
+num_marked <-10 #number to mark each period
+phi_bar <- 0.65 #prob of survival
+p_bar <- 0.4 # prob of recapture
+n.occasions <- 20                   # Number of capture occasions
+beta_size <- -0.5 # effect of size on survival on logit scale
+
+
+
+marked <- rep(num_marked, n.occasions-1)   # Annual number of newly marked individuals
+phi <- rep(phi_bar, n.occasions-1)
+p <- rep(p_bar, n.occasions-1)
+
+# Define matrices with survival and recapture probabilities
+PHI <- matrix(phi, ncol = n.occasions-1, nrow = sum(marked))
+
+
+P <- matrix(p, ncol = n.occasions-1, nrow = sum(marked))
+
+# simulate individual size
+sizes <- rep(0, sum(marked))
+
+
+for (i in 1:sum(marked)) {
+  sizes[i]<- rnorm(1,0,1)
+  PHI[i,]<-inv_logit(logit(phi)+rep(sizes[i]*beta_size,(n.occasions-1)))
+}
+
+# Define function to simulate a capture-history (CH) matrix
+simul.cjs <- function(PHI, P, marked){
+   n.occasions <- dim(PHI)[2] + 1
+   CH <- matrix(0, ncol = n.occasions, nrow = sum(marked))
+   # Define a vector with the occasion of marking
+   mark.occ <- rep(1:length(marked), marked[1:length(marked)])
+   # Fill the CH matrix
+   for (i in 1:sum(marked)){
+      CH[i, mark.occ[i]] <- 1       # Write an 1 at the release occasion
+      if (mark.occ[i]==n.occasions) next
+      for (t in (mark.occ[i]+1):n.occasions){
+         # Bernoulli trial: does individual survive occasion?
+         sur <- rbinom(1, 1, PHI[i,t-1])
+         if (sur==0) break # If dead, move to next individual
+              # Bernoulli trial: is individual recaptured?
+         rp <- rbinom(1, 1, P[i,t-1])
+         if (rp==1) CH[i,t] <- 1
+         } #t
+      } #i
+   return(CH)
+}
+
+
+CH <- simul.cjs(PHI, P, marked)
+```
+
+```{r}
+stan_data<- list(y=CH,
+nind =(n.occasions-1)*num_marked,
+n_occasions =n.occasions)
+```
+
+```{r}
+
+## Parameters monitored
+params <- c("mean_phi", "mean_p", "sigma2")
+
+## MCMC settings
+ni <- 5000
+nt <- 4
+nb <- 1000
+nc <- 4
+
+## Call Stan from R
+
+cjs_ind_raneff <- mod_markreff$sample(
+  data = stan_data,
+   chains = 4,
+  parallel_chains = 8,
+  iter_warmup = 1000,
+  iter_sampling = 1000
+)
+
+
+
+## Summarize posteriors
+cjs_ind_raneff$summary(variables = c("mean_phi","mean_p","sigma"))
+
+```
+My modified stan code to include a cofactor (size)
+
+```{r}
+mod_markselection <- cmdstan_model(stan_file="cjs_cofactor.stan")
+
+```
+simulation from the package
+```{r}
+
+logit<-Vectorize(function(x) log(x/(1-x)))
+inv_logit <- Vectorize(function(y) 1/(1+exp(-y)))
+
+
+# Define parameter values
+num_marked <-20 #number to mark each period
+phi_bar <- 0.65 #prob of survival
+p_bar <- 0.4 # prob of recapture
+n.occasions <- 26                   # Number of capture occasions
+beta_size <- 0.1 # effect of size on survival on logit scale
+
+
+
+marked <- rep(num_marked, n.occasions-1)   # Annual number of newly marked individuals
+phi <- rep(phi_bar, n.occasions-1)
+p <- rep(p_bar, n.occasions-1)
+
+# Define matrices with survival and recapture probabilities
+PHI <- matrix(phi, ncol = n.occasions-1, nrow = sum(marked))
+
+
+P <- matrix(p, ncol = n.occasions-1, nrow = sum(marked))
+
+# put in placeholder for size at 0
+sizes <- rep(0, sum(marked))
+
+
+for (i in 1:sum(marked)) {
+  sizes[i]<- rnorm(1,5,1)
+  PHI[i,]<-inv_logit(logit(phi)+rep(sizes[i]*beta_size,(n.occasions-1)))
+}
+
+# Define function to simulate a capture-history (CH) matrix
+simul.cjs <- function(PHI, P, marked){
+   n.occasions <- dim(PHI)[2] + 1
+   CH <- matrix(0, ncol = n.occasions, nrow = sum(marked))
+   # Define a vector with the occasion of marking
+   mark.occ <- rep(1:length(marked), marked[1:length(marked)])
+   # Fill the CH matrix
+   for (i in 1:sum(marked)){
+      CH[i, mark.occ[i]] <- 1       # Write an 1 at the release occasion
+      if (mark.occ[i]==n.occasions) next
+      for (t in (mark.occ[i]+1):n.occasions){
+         # Bernoulli trial: does individual survive occasion?
+         sur <- rbinom(1, 1, PHI[i,t-1])
+         if (sur==0) break # If dead, move to next individual
+              # Bernoulli trial: is individual recaptured?
+         rp <- rbinom(1, 1, P[i,t-1])
+         if (rp==1) CH[i,t] <- 1
+         } #t
+      } #i
+   return(CH)
+}
+
+
+CH <- simul.cjs(PHI, P, marked)
+```
+
+```{r}
+stan_data<- list(y=CH,
+                 size=sizes,
+nind =(n.occasions-1)*num_marked,
+n_occasions =n.occasions)
+
+```
+
+```{r}
+results <- mod_markselection$sample(
+  data = stan_data,
+  chains = 4,
+  parallel_chains = 8,
+  iter_warmup = 1000,
+  iter_sampling = 1000
+)
+```
+
+
+```{r}
+results$summary(variables = c("mean_phi","mean_p","beta_size"))
+```
+
+```{r}
+
+bayesplot::mcmc_pairs(results$draws(variables = c("mean_phi","mean_p","beta_size")))
+```
